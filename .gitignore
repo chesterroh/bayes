@@ -93,3 +93,6 @@ Thumbs.db
 .cache/
 tmp/
 temp/
+
+# Exclude old documentation
+old_docs/
