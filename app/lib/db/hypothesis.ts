@@ -1,6 +1,13 @@
 import { getSession } from '@/lib/neo4j';
 import type { HypothesisNode } from '@/lib/neo4j';
 
+// Helper to convert Neo4j DateTime to ISO string
+function formatDateTime(datetime: any): string | null {
+  if (!datetime) return null;
+  // Neo4j datetime objects have toString() method that returns ISO format
+  return datetime.toString();
+}
+
 export class HypothesisService {
   // Create a new hypothesis
   static async create(data: {
@@ -30,8 +37,10 @@ export class HypothesisService {
         id: node.properties.id,
         statement: node.properties.statement,
         confidence: node.properties.confidence,
-        updated: node.properties.updated,
-        verified: node.properties.verified
+        updated: formatDateTime(node.properties.updated),
+        verified: formatDateTime(node.properties.verified),
+        verification_type: node.properties.verification_type || null,
+        pre_verification_confidence: node.properties.pre_verification_confidence || null
       };
     } finally {
       await session.close();
@@ -58,8 +67,10 @@ export class HypothesisService {
         id: node.properties.id,
         statement: node.properties.statement,
         confidence: node.properties.confidence,
-        updated: node.properties.updated,
-        verified: node.properties.verified
+        updated: formatDateTime(node.properties.updated),
+        verified: formatDateTime(node.properties.verified),
+        verification_type: node.properties.verification_type || null,
+        pre_verification_confidence: node.properties.pre_verification_confidence || null
       };
     } finally {
       await session.close();
@@ -82,7 +93,8 @@ export class HypothesisService {
           statement: node.properties.statement,
           confidence: node.properties.confidence,
           updated: node.properties.updated,
-          verified: node.properties.verified
+          verified: node.properties.verified,
+          verification_type: node.properties.verification_type || null
         };
       });
     } finally {
@@ -114,8 +126,10 @@ export class HypothesisService {
         id: node.properties.id,
         statement: node.properties.statement,
         confidence: node.properties.confidence,
-        updated: node.properties.updated,
-        verified: node.properties.verified
+        updated: formatDateTime(node.properties.updated),
+        verified: formatDateTime(node.properties.verified),
+        verification_type: node.properties.verification_type || null,
+        pre_verification_confidence: node.properties.pre_verification_confidence || null
       };
     } finally {
       await session.close();
@@ -131,15 +145,30 @@ export class HypothesisService {
     const session = getSession();
     
     try {
+      // First, get the current confidence before verification
+      const currentResult = await session.run(
+        `MATCH (h:Hypothesis {id: $hId})
+         RETURN h.confidence as currentConfidence`,
+        { hId: hypothesisId }
+      );
+      
+      if (currentResult.records.length === 0) {
+        return null;
+      }
+      
+      const preVerificationConfidence = currentResult.records[0].get('currentConfidence');
       const newConfidence = verificationType === 'confirmed' ? 1.0 : 0.0;
       
       const result = await session.run(
         `MATCH (h:Hypothesis {id: $hId}), (e:Evidence {id: $eId})
          CREATE (e)-[:VERIFIED_BY {
            verified_date: datetime(),
-           verification_type: $vType
+           verification_type: $vType,
+           pre_verification_confidence: $preConf
          }]->(h)
          SET h.verified = datetime(),
+             h.verification_type = $vType,
+             h.pre_verification_confidence = $preConf,
              h.confidence = $confidence,
              h.updated = datetime()
          RETURN h`,
@@ -147,6 +176,7 @@ export class HypothesisService {
           hId: hypothesisId,
           eId: evidenceId,
           vType: verificationType,
+          preConf: preVerificationConfidence,
           confidence: newConfidence
         }
       );
@@ -161,8 +191,10 @@ export class HypothesisService {
         id: node.properties.id,
         statement: node.properties.statement,
         confidence: node.properties.confidence,
-        updated: node.properties.updated,
-        verified: node.properties.verified
+        updated: formatDateTime(node.properties.updated),
+        verified: formatDateTime(node.properties.verified),
+        verification_type: node.properties.verification_type || null,
+        pre_verification_confidence: node.properties.pre_verification_confidence || null
       };
     } finally {
       await session.close();

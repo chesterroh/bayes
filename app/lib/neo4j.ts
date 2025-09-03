@@ -30,15 +30,17 @@ export interface HypothesisNode {
   id: string;
   statement: string;
   confidence: number;
-  updated: Date;
-  verified: Date | null;
+  updated: string | null;
+  verified: string | null;
+  verification_type?: 'confirmed' | 'refuted' | null;
+  pre_verification_confidence?: number | null;
 }
 
 export interface EvidenceNode {
   id: string;
   content: string;
   source_url: string;
-  timestamp: Date;
+  timestamp: string | null;
 }
 
 export interface AffectsRelationship {

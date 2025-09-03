@@ -19,6 +19,23 @@ Where:
 
 ---
 
+## Important Development Guidelines
+
+### 🚫 No Python Policy
+**This project uses TypeScript/Node.js exclusively.** 
+- DO NOT create or use Python scripts
+- All scripts must be in JavaScript/TypeScript or shell scripts
+- All backend code runs on Node.js
+- Database interactions use the neo4j-driver npm package
+
+### Technology Consistency
+- Frontend: Next.js with TypeScript
+- Backend: Next.js API routes (TypeScript)
+- Scripts: Node.js or shell scripts only
+- Database: Neo4j with Node.js driver
+
+---
+
 ## 1. Product Requirements Document (PRD)
 
 ### 1.1 Problem Statement
@@ -688,34 +705,88 @@ Post-verification:
 ---
 
 *Last Updated: 2025-01-03*
-*Version: 1.2*
+*Version: 1.3*
 
 ---
 
-## Implementation Status
+## 📝 Recent Changes (January 2025 Session)
 
-### Completed Components
+### Session 1: Core UI Implementation
+1. **Complete UI Implementation**: Built full React frontend with hypothesis and evidence management
+2. **Auto-ID Generation**: Automatic ID generation with collision detection for both hypotheses (H001, H002...) and evidence (E001, E002...)
+3. **Full CRUD Operations**: Added update and delete functionality for evidence (previously only had create/read)
+4. **Verification Status Fix**: Fixed bug where NULL verified status was showing as "refuted" - now properly shows "Pending"
+5. **No Python Policy**: Removed all Python scripts, converted everything to TypeScript/Node.js
+6. **Form Validation**: Real-time ID collision detection with visual feedback
+7. **Timeout Protection**: Added 5-second timeouts to prevent hanging on API calls
+8. **Database Scripts**: Created comprehensive database management scripts (check, clear, setup constraints)
+
+### Session 2: Verification & Prediction Tracking
+1. **Verification UI Fix**: Fixed missing verify/refute buttons in hypothesis menu (was checking wrong field)
+2. **Prediction Accuracy Tracking**: Added `pre_verification_confidence` field to track confidence before verification
+3. **Accuracy Display**: Shows prediction accuracy score after verification with visual feedback
+4. **Accuracy Report Script**: Created `check-prediction-accuracy.js` for analyzing prediction calibration
+5. **Bayesian Logic Documentation**: Created comprehensive BAYES_EXPLAIN.md explaining the mathematical logic
+6. **Neo4j Queries Guide**: Added NEO4J_QUERIES.md with helpful queries for viewing relationships
+
+### Technical Improvements
+- Fixed hypothesis verification UI (changed from checking `verified` to `verification_type`)
+- Added prediction accuracy calculation and display in UI
+- Store pre-verification confidence for accuracy analysis
+- Created comprehensive documentation for Bayesian calculations
+- Added troubleshooting guide for Neo4j relationship visualization
+
+### Documentation Created
+- **BAYES_EXPLAIN.md**: Complete explanation of Bayesian logic and calculations
+- **NEO4J_QUERIES.md**: Guide for viewing and debugging relationships in Neo4j Browser
+- Updated README.md with clearer usage instructions
+- Enhanced CLAUDE.md with implementation details
+
+---
+
+## Implementation Status (Updated: January 2025)
+
+### ✅ Completed Components
 
 #### Database Layer (TypeScript/Node.js)
 - ✅ Neo4j connection management (`app/lib/neo4j.ts`)
-- ✅ Hypothesis service with CRUD operations (`app/lib/db/hypothesis.ts`)
-- ✅ Evidence service with linking capabilities (`app/lib/db/evidence.ts`)
+- ✅ Hypothesis service with full CRUD operations (`app/lib/db/hypothesis.ts`)
+- ✅ Evidence service with full CRUD operations (`app/lib/db/evidence.ts`)
 - ✅ Bayesian calculations and propagation (`app/lib/db/bayesian.ts`)
 - ✅ Type definitions for all nodes and relationships
+- ✅ Verification type tracking (confirmed/refuted/pending)
 
 #### API Layer (Next.js API Routes)
 - ✅ `/api/hypotheses` - GET all, POST new
 - ✅ `/api/hypotheses/[id]` - GET, PUT, DELETE specific
 - ✅ `/api/evidence` - GET all, POST new
+- ✅ `/api/evidence/[id]` - GET, PUT, DELETE specific
 - ✅ `/api/evidence/[id]/link` - Link evidence to hypothesis
 - ✅ `/api/update` - Bayesian update with optional propagation
 - ✅ `/api/verify` - Verify/refute hypothesis
+- ✅ `/api/next-id` - Auto-generate next available ID
+- ✅ `/api/check-id` - Check for ID collisions
 
-#### Infrastructure
-- ✅ Next.js application with TypeScript
+#### User Interface (React/Next.js)
+- ✅ Main dashboard with tabbed interface
+- ✅ Hypothesis list with cards showing confidence and status
+- ✅ Evidence list with inline editing
+- ✅ Add hypothesis form with auto-ID generation
+- ✅ Add evidence form with hypothesis linking
+- ✅ Edit/delete functionality for both entities
+- ✅ Real-time ID collision detection
+- ✅ Visual status indicators (Pending/Confirmed/Refuted)
+- ✅ Dark mode support
+- ✅ Responsive design with Tailwind CSS
+
+#### Infrastructure & Tools
+- ✅ Next.js 14 application with TypeScript
 - ✅ Neo4j database configured and running
-- ✅ Environment configuration
-- ✅ Test data and indexes created
+- ✅ Environment configuration (.env.local)
+- ✅ Database management scripts (Node.js only)
+- ✅ API test suite (Node.js)
+- ✅ Database constraints and indexes
+- ✅ Help documentation system
 
 ### Current Architecture
 
@@ -750,18 +821,32 @@ Post-verification:
 └─────────────────────────────────────────┘
 ```
 
-### Next Steps
+### 🚀 Next Steps for Enhancement
 
-#### Phase 3: User Interface
-- [ ] Create hypothesis list component
-- [ ] Build evidence input form
-- [ ] Design confidence visualization
-- [ ] Implement graph visualization with D3.js or Cytoscape.js
-- [ ] Add real-time updates with React Query or SWR
-
-#### Phase 4: Advanced Features
-- [ ] LLM integration for evidence analysis
-- [ ] Batch import/export functionality
-- [ ] Time-series analysis of belief evolution
+#### Phase 1: Visualization & Analytics
+- [ ] Graph visualization with D3.js or Cytoscape.js
+- [ ] Time-series charts for belief evolution
 - [ ] Prediction accuracy dashboard
-- [ ] WebSocket support for real-time updates
+- [ ] Export capabilities (CSV, JSON)
+- [ ] Advanced search and filtering
+
+#### Phase 2: Intelligence Layer
+- [ ] LLM integration for evidence analysis
+- [ ] Automatic hypothesis-evidence matching
+- [ ] Evidence strength assessment
+- [ ] Source credibility scoring
+- [ ] Natural language hypothesis input
+
+#### Phase 3: Advanced Features
+- [ ] Batch import from various sources
+- [ ] WebSocket for real-time collaboration
+- [ ] Mobile app with React Native
+- [ ] Browser extension for evidence capture
+- [ ] API webhooks for external integrations
+
+#### Phase 4: Enterprise Features
+- [ ] Multi-user support with authentication
+- [ ] Team collaboration features
+- [ ] Audit logging and versioning
+- [ ] Advanced permissions system
+- [ ] Cloud deployment options

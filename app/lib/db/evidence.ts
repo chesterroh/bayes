@@ -1,6 +1,13 @@
 import { getSession } from '@/lib/neo4j';
 import type { EvidenceNode, AffectsRelationship } from '@/lib/neo4j';
 
+// Helper to convert Neo4j DateTime to ISO string
+function formatDateTime(datetime: any): string | null {
+  if (!datetime) return null;
+  // Neo4j datetime objects have toString() method that returns ISO format
+  return datetime.toString();
+}
+
 export class EvidenceService {
   // Create new evidence
   static async create(data: {
@@ -29,7 +36,7 @@ export class EvidenceService {
         id: node.properties.id,
         content: node.properties.content,
         source_url: node.properties.source_url,
-        timestamp: node.properties.timestamp
+        timestamp: formatDateTime(node.properties.timestamp)
       };
     } finally {
       await session.close();
@@ -56,7 +63,7 @@ export class EvidenceService {
         id: node.properties.id,
         content: node.properties.content,
         source_url: node.properties.source_url,
-        timestamp: node.properties.timestamp
+        timestamp: formatDateTime(node.properties.timestamp)
       };
     } finally {
       await session.close();
@@ -78,7 +85,7 @@ export class EvidenceService {
           id: node.properties.id,
           content: node.properties.content,
           source_url: node.properties.source_url,
-          timestamp: node.properties.timestamp
+          timestamp: formatDateTime(node.properties.timestamp)
         };
       });
     } finally {
@@ -140,7 +147,7 @@ export class EvidenceService {
             id: node.properties.id,
             content: node.properties.content,
             source_url: node.properties.source_url,
-            timestamp: node.properties.timestamp
+            timestamp: formatDateTime(node.properties.timestamp)
           },
           relationship: {
             strength: rel.properties.strength,
@@ -153,6 +160,43 @@ export class EvidenceService {
     }
   }
   
+  // Get single evidence by ID (alias for getById for consistency)
+  static async get(id: string): Promise<EvidenceNode | null> {
+    return this.getById(id);
+  }
+
+  // Update evidence
+  static async update(id: string, data: {
+    content: string;
+    source_url: string;
+  }): Promise<EvidenceNode | null> {
+    const session = getSession();
+    
+    try {
+      const result = await session.run(
+        `MATCH (e:Evidence {id: $id})
+         SET e.content = $content,
+             e.source_url = $source_url
+         RETURN e`,
+        { id, ...data }
+      );
+      
+      if (result.records.length === 0) {
+        return null;
+      }
+      
+      const node = result.records[0].get('e');
+      return {
+        id: node.properties.id,
+        content: node.properties.content,
+        source_url: node.properties.source_url,
+        timestamp: formatDateTime(node.properties.timestamp)
+      };
+    } finally {
+      await session.close();
+    }
+  }
+
   // Delete evidence
   static async delete(id: string): Promise<boolean> {
     const session = getSession();

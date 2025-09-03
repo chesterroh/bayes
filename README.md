@@ -1,519 +1,316 @@
 # Bayesian Knowledge Management System (BKMS)
 
-A personal belief tracking system using Bayesian probability and Neo4j graph database.
+A personal knowledge management system based on Bayesian probability theory, designed to track how beliefs evolve when encountering new evidence.
 
-🎆 **Current Status**: Backend API completed, Frontend UI in development
+## 🎯 Overview
 
-## 🚀 Quick Start
+BKMS helps you:
+- Track hypotheses and quantify your confidence in them
+- Process evidence through Bayesian probability calculations
+- Detect contradictions in your belief system  
+- Update beliefs rationally when encountering new information
+- Verify or refute hypotheses with definitive evidence
 
-### Prerequisites
-- Node.js 18+ (for Next.js application)
-- Neo4j 4.4+ (Desktop or Docker)
-- npm or yarn package manager
+**Core Philosophy**: "Today's posterior becomes tomorrow's prior"
 
-### Installation
+## ✨ Features
 
-1. **Install Neo4j Desktop** (Recommended for beginners)
-   - Download from: https://neo4j.com/download/
-   - Create a new project and database
-   - Set password (remember it!)
-   - Start the database
+### Core Functionality
+- **Hypothesis Management**: Create, update, and delete hypotheses with confidence levels (0-100%)
+- **Evidence Tracking**: Add evidence from various sources and link to hypotheses
+- **Bayesian Updates**: Automatic probability calculations when new evidence affects hypotheses
+- **Verification System**: Mark hypotheses as confirmed or refuted with definitive proof
+- **Auto-ID Generation**: Automatic ID generation with real-time collision detection
+- **Full CRUD Operations**: Complete create, read, update, delete for all entities
 
-2. **Clone the repository**
-   ```bash
-   git clone https://github.com/chesterroh/bayes.git
-   cd bayes
-   ```
+### User Interface
+- **Modern Web UI**: Clean, responsive interface built with Next.js and React
+- **Dark Mode Support**: Full dark mode compatibility
+- **Visual Feedback**: Color-coded confidence levels and verification status
+- **Inline Editing**: Edit hypotheses and evidence directly in the interface
+- **Real-time Validation**: Instant feedback on duplicate IDs and data conflicts
+- **Status Indicators**: 
+  - ⏳ Pending - Hypothesis under evaluation
+  - ✓ Confirmed - Hypothesis proven true
+  - ✗ Refuted - Hypothesis proven false
 
-3. **Install Next.js dependencies**
-   ```bash
-   cd app
-   npm install
-   ```
+## 🛠️ Technology Stack
 
-4. **Configure database connection**
-   ```bash
-   # Already configured in app/.env.local
-   # Default: neo4j://localhost:7687
-   # Username: neo4j
-   # Password: neo4jneo4j
-   ```
+- **Frontend**: Next.js 14, TypeScript, React, Tailwind CSS
+- **Backend**: Next.js API Routes (TypeScript/Node.js)
+- **Database**: Neo4j Graph Database
+- **Runtime**: Node.js 18+
+- **Package Manager**: npm
 
-5. **Start the development server**
-   ```bash
-   npm run dev
-   # Application runs on http://localhost:3000
-   ```
+**Important**: This project uses TypeScript/Node.js exclusively. No Python scripts are used or required.
 
----
+## 📋 Prerequisites
 
-## 📖 User Guide
+- Node.js 18 or higher
+- Neo4j 5.x (Community or Enterprise Edition)
+- npm package manager
 
-### Basic Concepts
+## 🔧 Installation
 
-**Hypothesis**: A belief you hold
-- Example: "Tesla will achieve Level 5 autonomy by 2026"
-- Has a confidence level (0-100%)
-- Can be verified when definitive proof arrives
-- Once verified, becomes immutable (no further updates)
-
-**Evidence**: Information that affects your beliefs  
-- Example: "Waymo expands to 10 new cities"
-- Can support or contradict hypotheses probabilistically
-- Can definitively verify or refute hypotheses
-
-**Relationships**: How beliefs and evidence connect
-- **AFFECTS**: Evidence updates hypothesis confidence (Bayesian)
-- **VERIFIED_BY**: Evidence definitively proves/disproves hypothesis
-- **RELATES_TO**: Hypothesis depends on or contradicts another
-
-### Core Operations
-
-#### 1. Adding a Hypothesis (via API)
-
+### 1. Clone the Repository
 ```bash
-# Create a new hypothesis
-curl -X POST http://localhost:3000/api/hypotheses \
-  -H "Content-Type: application/json" \
-  -d '{
-    "id": "H001",
-    "statement": "AI will significantly impact software development by 2025",
-    "confidence": 0.75
-  }'
-
-# Get all hypotheses
-curl http://localhost:3000/api/hypotheses
-
-# Get specific hypothesis
-curl http://localhost:3000/api/hypotheses/H001
+git clone https://github.com/yourusername/bkms.git
+cd bkms
 ```
 
-#### 2. Adding Evidence
+### 2. Install Neo4j
 
+**macOS with Homebrew**:
 ```bash
-# Create evidence
-curl -X POST http://localhost:3000/api/evidence \
-  -H "Content-Type: application/json" \
-  -d '{
-    "id": "E001",
-    "content": "GitHub Copilot adoption reaches 1 million developers",
-    "source_url": "https://github.blog/copilot-stats"
-  }'
-
-# Link evidence to hypothesis
-curl -X POST http://localhost:3000/api/evidence/E001/link \
-  -H "Content-Type: application/json" \
-  -d '{
-    "hypothesisId": "H001",
-    "strength": 0.8,
-    "direction": "supports"
-  }'
+brew install --cask neo4j
 ```
 
-#### 3. Updating Beliefs
+**Other platforms**: Download from [neo4j.com/download](https://neo4j.com/download/)
 
-```bash
-# Manual confidence update
-curl -X PUT http://localhost:3000/api/hypotheses/H001 \
-  -H "Content-Type: application/json" \
-  -d '{"confidence": 0.82}'
-
-# Automatic Bayesian update
-curl -X POST http://localhost:3000/api/update \
-  -H "Content-Type: application/json" \
-  -d '{
-    "hypothesisId": "H001",
-    "evidenceId": "E001",
-    "propagate": true
-  }'
-
-# Verify hypothesis (definitive proof)
-curl -X POST http://localhost:3000/api/verify \
-  -H "Content-Type: application/json" \
-  -d '{
-    "hypothesisId": "H002",
-    "evidenceId": "E002",
-    "verificationType": "confirmed"
-  }'
-```
-
-#### 4. TypeScript/JavaScript Client Example
-
-```typescript
-// In a Next.js component or page
-import { useEffect, useState } from 'react';
-
-interface Hypothesis {
-  id: string;
-  statement: string;
-  confidence: number;
-  verified: Date | null;
-}
-
-function BeliefTracker() {
-  const [hypotheses, setHypotheses] = useState<Hypothesis[]>([]);
-  
-  useEffect(() => {
-    fetch('/api/hypotheses')
-      .then(res => res.json())
-      .then(data => setHypotheses(data));
-  }, []);
-  
-  const addHypothesis = async (hypothesis: Hypothesis) => {
-    const response = await fetch('/api/hypotheses', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(hypothesis)
-    });
-    return response.json();
-  };
-  
-  // ... render hypotheses
-}
-```
-
----
-
-## 🗄️ Neo4j Database Management
-
-### Accessing Neo4j Browser
-
+### 3. Configure Neo4j
 1. Open Neo4j Desktop
-2. Click on your database
-3. Click "Open Neo4j Browser"
-4. Default URL: http://localhost:7474
+2. Create a new project and database
+3. Set credentials:
+   - Username: `neo4j`
+   - Password: `neo4jneo4j`
+4. Start the database
 
-### Essential Cypher Queries
-
-#### View all hypotheses
-```cypher
-MATCH (h:Hypothesis)
-RETURN h
-```
-
-#### View belief network
-```cypher
-MATCH (h1:Hypothesis)-[r]-(h2:Hypothesis)
-RETURN h1, r, h2
-```
-
-#### Find evidence for a hypothesis
-```cypher
-MATCH (e:Evidence)-[:AFFECTS]->(h:Hypothesis {id: 'H001'})
-RETURN e, h
-```
-
-#### Find verified hypotheses
-```cypher
-MATCH (h:Hypothesis)
-WHERE h.verified IS NOT NULL
-RETURN h.statement, h.confidence,
-       CASE WHEN h.confidence = 1.0 THEN 'Confirmed' ELSE 'Refuted' END as outcome
-```
-
-#### Find verification evidence
-```cypher
-MATCH (e:Evidence)-[v:VERIFIED_BY]->(h:Hypothesis)
-RETURN h.statement, e.content, v.verification_type, v.verified_date
-ORDER BY v.verified_date DESC
-```
-
-#### Delete everything (careful!)
-```cypher
-MATCH (n)
-DETACH DELETE n
-```
-
-### Backup & Restore
-
-#### Backup database
+### 4. Install Dependencies
 ```bash
-neo4j-admin dump --database=neo4j --to=backup.dump
+cd app
+npm install
 ```
 
-#### Restore database
+### 5. Setup Database Constraints (First Time Only)
 ```bash
-neo4j-admin load --from=backup.dump --database=neo4j --force
+node scripts/setup-constraints.js
 ```
 
----
+### 6. Configure Environment (Optional)
+Create `.env.local` in the `app` directory:
+```env
+NEO4J_URI=bolt://localhost:7687
+NEO4J_USER=neo4j
+NEO4J_PASSWORD=neo4jneo4j
+```
 
-## 🎯 API Endpoints
+### 7. Start the Application
+```bash
+npm run dev
+```
+
+Open [http://localhost:3000](http://localhost:3000) in your browser.
+
+## 📖 Quick Start Guide
+
+### Available Commands
+
+Run `./help.sh` to see all available commands, or:
+
+```bash
+# Database Management
+./clear-db.sh                      # Clear database (with confirmation)
+./clear-db-force.sh                 # Clear database (no confirmation)
+cd app && node scripts/check-database.js  # Check database status
+
+# Development
+cd app && npm run dev               # Start development server
+cd app && npm run build             # Build for production
+cd app && npm start                 # Run production build
+
+# Testing
+node test-api.js                    # Run API tests (server must be running)
+```
+
+## 🎮 Using the Application
+
+### Creating a Hypothesis
+1. Click "Create New Hypothesis"
+2. ID is auto-generated (e.g., H001, H002)
+3. Enter your hypothesis statement
+4. Set initial confidence (0-100%)
+5. Click "Create Hypothesis"
+
+### Adding Evidence  
+1. Navigate to the Evidence tab
+2. Click "Add New Evidence"
+3. ID is auto-generated (e.g., E001, E002)
+4. Enter evidence content and source URL
+5. Optionally link to a hypothesis:
+   - Select target hypothesis
+   - Set strength (0-100%)
+   - Choose direction (supports/contradicts)
+   - Enable Bayesian update
+6. Click "Create Evidence"
+
+### Managing Hypotheses
+- **Access Actions**: Click the **⋮** (three dots) button in the top-right corner of any hypothesis card
+- **Update Confidence**: From the ⋮ menu → Click "Update Confidence" → Enter new value (0-100)
+- **Verify as True**: From the ⋮ menu → Click "Verify ✓" → Enter evidence ID that proves it
+- **Refute as False**: From the ⋮ menu → Click "Refute ✗" → Enter evidence ID that disproves it
+- **Delete**: From the ⋮ menu → Click "Delete" (requires confirmation)
+- **View Status**: Check the badge next to ID (⏳ Pending / ✓ Confirmed / ✗ Refuted)
+
+### Managing Evidence
+- **Edit**: Click ✏️ to modify content or source
+- **Delete**: Click 🗑️ to remove (requires confirmation)
+- **Link**: Connect to hypotheses during creation
+
+## 🗄️ Database Schema
+
+### Nodes
+
+**Hypothesis**
+```typescript
+{
+  id: string                    // e.g., "H001"
+  statement: string              // The belief text
+  confidence: number             // 0.0 to 1.0
+  updated: Date                  // Last modification
+  verified: Date | null          // When verified (null if pending)
+  verification_type: 'confirmed' | 'refuted' | null
+}
+```
+
+**Evidence**
+```typescript
+{
+  id: string                    // e.g., "E001"
+  content: string               // Evidence text
+  source_url: string            // Source URL
+  timestamp: Date               // When added
+}
+```
+
+### Relationships
+
+- **AFFECTS**: Evidence → Hypothesis (probabilistic update)
+  - `strength`: 0.0 to 1.0
+  - `direction`: 'supports' | 'contradicts'
+
+- **VERIFIED_BY**: Evidence → Hypothesis (definitive proof)
+  - `verified_date`: When verified
+  - `verification_type`: 'confirmed' | 'refuted'
+
+- **RELATES_TO**: Hypothesis → Hypothesis
+  - `type`: 'depends_on' | 'contradicts'
+  - `strength`: 0.0 to 1.0
+
+## 🧮 Bayesian Calculations
+
+The system uses Bayes' Theorem for belief updates:
+
+```
+Posterior = Signal / (Signal + Noise)
+
+Where:
+- Signal = P(E|H) × P(H)
+- Noise = P(E|~H) × P(~H)
+```
+
+### Example Update
+1. Initial belief: "AI will transform software by 2025" (60% confidence)
+2. Evidence: "GitHub Copilot reaches 1M users" (supports, strength: 0.8)
+3. Calculation:
+   - Signal = 0.8 × 0.6 = 0.48
+   - Noise = 0.2 × 0.4 = 0.08
+   - Posterior = 0.48 / (0.48 + 0.08) = 85.7%
+4. Updated confidence: 85.7%
+
+## 🎯 API Reference
 
 ### Hypothesis Endpoints
-- `GET /api/hypotheses` - Get all hypotheses
-- `POST /api/hypotheses` - Create new hypothesis
+- `GET /api/hypotheses` - List all hypotheses
+- `POST /api/hypotheses` - Create hypothesis
 - `GET /api/hypotheses/[id]` - Get specific hypothesis
-- `PUT /api/hypotheses/[id]` - Update hypothesis confidence
+- `PUT /api/hypotheses/[id]` - Update confidence
 - `DELETE /api/hypotheses/[id]` - Delete hypothesis
 
 ### Evidence Endpoints
-- `GET /api/evidence` - Get all evidence
-- `POST /api/evidence` - Create new evidence
-- `POST /api/evidence/[id]/link` - Link evidence to hypothesis
+- `GET /api/evidence` - List all evidence
+- `POST /api/evidence` - Create evidence
+- `GET /api/evidence/[id]` - Get specific evidence
+- `PUT /api/evidence/[id]` - Update evidence
+- `DELETE /api/evidence/[id]` - Delete evidence
+- `POST /api/evidence/[id]/link` - Link to hypothesis
 
 ### Bayesian Operations
 - `POST /api/update` - Perform Bayesian update
-- `POST /api/verify` - Verify or refute hypothesis
+- `POST /api/verify` - Verify/refute hypothesis
 
-## 📋 Project Structure
+### Utility Endpoints
+- `GET /api/next-id?type=hypothesis|evidence` - Get next available ID
+- `GET /api/check-id?type=hypothesis|evidence&id=XXX` - Check if ID exists
 
-```
-bayes/
-├── app/                        # Next.js application
-│   ├── app/                    # App router pages
-│   │   ├── api/                # API routes
-│   │   │   ├── hypotheses/     # Hypothesis endpoints
-│   │   │   ├── evidence/       # Evidence endpoints
-│   │   │   ├── update/         # Bayesian update
-│   │   │   └── verify/         # Verification endpoint
-│   │   ├── layout.tsx          # Root layout
-│   │   └── page.tsx            # Home page
-│   ├── lib/                    # Library code
-│   │   ├── neo4j.ts            # Neo4j connection
-│   │   └── db/                 # Database services
-│   │       ├── hypothesis.ts   # Hypothesis service
-│   │       ├── evidence.ts     # Evidence service
-│   │       └── bayesian.ts     # Bayesian calculations
-│   ├── public/                 # Static files
-│   ├── package.json            # Dependencies
-│   └── .env.local              # Environment variables
-├── CLAUDE.md                   # Technical documentation
-├── README.md                   # User guide (this file)
-└── test_neo4j_connection.py    # Neo4j test script
-```
+## 📊 Neo4j Queries
 
----
+Access Neo4j Browser at [http://localhost:7474](http://localhost:7474)
 
-## 🛠️ Configuration
+### Useful Cypher Queries
 
-### Environment Variables (.env)
+```cypher
+-- View all hypotheses
+MATCH (h:Hypothesis) RETURN h
 
-```bash
-# Neo4j Configuration
-NEO4J_URI=bolt://localhost:7687
-NEO4J_USER=neo4j
-NEO4J_PASSWORD=your_password
+-- Find verified hypotheses
+MATCH (h:Hypothesis)
+WHERE h.verified IS NOT NULL
+RETURN h.statement, h.verification_type, h.verified
 
-# LLM Configuration (optional)
-OPENAI_API_KEY=sk-...
-ANTHROPIC_API_KEY=sk-ant-...
+-- View belief network
+MATCH (h:Hypothesis)-[r]-(e:Evidence)
+RETURN h, r, e
 
-# Application Settings
-DEBUG=false
-LOG_LEVEL=INFO
+-- Find evidence for hypothesis
+MATCH (e:Evidence)-[:AFFECTS]->(h:Hypothesis {id: 'H001'})
+RETURN e, h
+
+-- Clear database
+MATCH (n) DETACH DELETE n
 ```
 
-### Config File (config.yaml)
+## 🐛 Troubleshooting
 
-```yaml
-bayesian:
-  dampening_factor: 0.8  # For belief propagation
-  min_evidence_strength: 0.1  # Ignore weak evidence
-  
-evidence:
-  auto_categorize: true
-  llm_analysis: false
-  
-ui:
-  theme: dark
-  graph_layout: force-directed
-```
+### Neo4j Connection Issues
+- Verify Neo4j is running in Neo4j Desktop
+- Check credentials match `.env.local`
+- Ensure bolt://localhost:7687 is accessible
+- Run `cd app && node scripts/check-database.js` to test connection
 
----
+### ID Generation Failures  
+- IDs auto-generate on form open
+- Falls back to H001/E001 if generation fails
+- Manual override possible but validates for duplicates
+- Check Neo4j connection if persistent failures
 
-## 📔 Verification vs Bayesian Updates
-
-### Understanding the Difference
-
-**Bayesian Updates (AFFECTS relationship)**:
-- Gradual confidence changes based on evidence
-- Probabilistic reasoning
-- Confidence moves between 0% and 100%
-- Multiple pieces of evidence accumulate
-- Example: News about Tesla's progress affects FSD prediction
-
-**Verification (VERIFIED_BY relationship)**:
-- Definitive proof or disproof
-- Binary outcome: confirmed (100%) or refuted (0%)
-- Hypothesis becomes immutable after verification
-- Single piece of conclusive evidence
-- Example: December 31st proves/disproves a 2024 prediction
-
-### Verification Workflow
-
-```python
-# 1. Create prediction
-hypothesis = bg.add_hypothesis(
-    id="H007",
-    statement="Apple will release AR glasses in 2025",
-    confidence=0.60
-)
-
-# 2. Update confidence as evidence arrives (2024-2025)
-# ... multiple Bayesian updates ...
-
-# 3. Verification moment arrives (e.g., end of 2025)
-if apple_released_ar_glasses:
-    bg.verify_hypothesis("H007", evidence_id, "confirmed")
-    # Confidence → 1.0, verified → timestamp
-else:
-    bg.verify_hypothesis("H007", evidence_id, "refuted")
-    # Confidence → 0.0, verified → timestamp
-
-# 4. Analyze prediction accuracy
-print(f"Your confidence before verification: {pre_verification_confidence}")
-print(f"Actual outcome: {outcome}")
-```
-
----
-
-## 📊 Visualization
-
-### Web UI (Coming Soon)
-
-```bash
-cd web-ui
-npm install
-npm start
-# Open http://localhost:3000
-```
-
-### CLI Visualization
-
-```bash
-# Show belief graph in terminal
-python -m bkms.cli graph
-
-# Show belief evolution
-python -m bkms.cli history H001
-
-# Generate report
-python -m bkms.cli report --format=markdown
-
-# Show verified predictions
-python -m bkms.cli verified
-
-# Analyze prediction accuracy
-python -m bkms.cli accuracy --year=2024
-```
-
----
-
-## 🔧 Troubleshooting
-
-### Common Issues
-
-**Neo4j won't start**
-- Check if port 7687 is already in use
-- Verify Neo4j Desktop is running
-- Check database is started in Neo4j Desktop
-
-**API Connection refused**
-- Ensure Neo4j is running
-- Check credentials in `app/.env.local`
-- Verify Next.js server is running: `npm run dev`
-
-**TypeScript errors**
-- Run `npm install` in the app directory
-- Check Node.js version (18+ required)
-
-**Database already has data**
-- Clear database in Neo4j Browser:
-  ```cypher
-  MATCH (n) DETACH DELETE n
-  ```
-
-**Slow queries**
-- Indexes are automatically created
-- Check Neo4j Browser for query performance
-
----
-
-## 📚 Development Guide
-
-### Running Tests
-
-```bash
-# Test Neo4j connection
-python3 test_neo4j_connection.py
-
-# Run Next.js tests (when added)
-cd app
-npm test
-```
-
-### Adding New API Endpoints
-
-Create a new route in `app/app/api/`:
-
-```typescript
-// app/app/api/custom/route.ts
-import { NextRequest, NextResponse } from 'next/server';
-import { getSession } from '@/lib/neo4j';
-
-export async function GET(request: NextRequest) {
-  const session = getSession();
-  try {
-    // Your Cypher query here
-    const result = await session.run('MATCH (n) RETURN n');
-    return NextResponse.json(result.records);
-  } finally {
-    await session.close();
-  }
-}
-```
-
-### Extending the Data Model
-
-Add new node types or relationships in `lib/neo4j.ts`:
-
-```typescript
-export interface CustomNode {
-  id: string;
-  // Add your fields
-}
-
-export interface CustomRelationship {
-  // Define relationship properties
-}
-```
-
----
+### Form Loading Issues
+- Forms have 5-second timeout protection
+- Check browser console for errors
+- Restart dev server if unresponsive
+- Clear browser cache if needed
 
 ## 🤝 Contributing
 
-We welcome contributions! Please see [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
+1. Fork the repository
+2. Create a feature branch
+3. Follow TypeScript/Node.js conventions
+4. Test thoroughly
+5. Submit a pull request
 
----
+**Note**: All scripts must be in JavaScript/TypeScript or shell. No Python scripts.
 
-## 📄 License
+## 📝 License
 
-MIT License - see [LICENSE](LICENSE) for details.
-
----
+MIT License - See LICENSE file for details
 
 ## 🙏 Acknowledgments
 
-Based on conversations about Bayesian reasoning and inspired by the principle:
-> "Today's posterior becomes tomorrow's prior"
+- Built with Next.js, React, and Neo4j
+- Inspired by Bayesian probability theory
+- Based on the principle: "Today's posterior becomes tomorrow's prior"
 
 ---
 
-## 📞 Support
+For detailed technical documentation and architecture, see [CLAUDE.md](CLAUDE.md)
 
-- GitHub Issues: [github.com/yourusername/bkms/issues](https://github.com/yourusername/bkms/issues)
-- Documentation: [docs.bkms.io](https://docs.bkms.io)
-- Email: support@bkms.io
-
----
-
-*Version 1.2 | Last Updated: 2025-01-03*
-
-## 🚀 Current Implementation Status
-
-- ✅ **Backend**: Fully functional TypeScript/Node.js API
-- ✅ **Database**: Neo4j configured with all node types and relationships
-- ✅ **Bayesian Engine**: Complete with propagation and verification
-- 🏗️ **Frontend UI**: In development (React components pending)
-- 🔄 **Next Phase**: Building interactive UI components
+*Version 2.0 | Last Updated: January 2025*
