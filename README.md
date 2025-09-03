@@ -43,14 +43,18 @@ A personal belief tracking system using Bayesian probability and Neo4j graph dat
 **Hypothesis**: A belief you hold
 - Example: "Tesla will achieve Level 5 autonomy by 2026"
 - Has a confidence level (0-100%)
+- Can be verified when definitive proof arrives
+- Once verified, becomes immutable (no further updates)
 
 **Evidence**: Information that affects your beliefs  
 - Example: "Waymo expands to 10 new cities"
-- Can support or contradict hypotheses
+- Can support or contradict hypotheses probabilistically
+- Can definitively verify or refute hypotheses
 
 **Relationships**: How beliefs and evidence connect
-- Evidence AFFECTS Hypothesis
-- Hypothesis RELATES_TO Hypothesis
+- **AFFECTS**: Evidence updates hypothesis confidence (Bayesian)
+- **VERIFIED_BY**: Evidence definitively proves/disproves hypothesis
+- **RELATES_TO**: Hypothesis depends on or contradicts another
 
 ### Core Operations
 
@@ -94,8 +98,15 @@ bg.link_evidence_to_hypothesis(
 # Manual update
 bg.update_confidence("H001", new_confidence=0.82)
 
-# Automatic Bayesian update
+# Automatic Bayesian update (probabilistic)
 bg.bayesian_update("H001", "E001")
+
+# Definitive verification (sets confidence to 1.0 or 0.0)
+bg.verify_hypothesis(
+    hypothesis_id="H002",
+    evidence_id="E002",
+    verification_type="confirmed"  # or "refuted"
+)
 ```
 
 #### 4. Querying Your Beliefs
@@ -105,12 +116,22 @@ bg.bayesian_update("H001", "E001")
 belief = bg.get_hypothesis("H001")
 print(f"Belief: {belief.statement}")
 print(f"Confidence: {belief.confidence:.1%}")
+print(f"Verified: {belief.verified or 'Not yet'}")
 
 # Find contradictions
 contradictions = bg.find_contradictions(min_confidence=0.7)
 
 # Track belief evolution
 history = bg.get_belief_history("H001")
+
+# Get all verified predictions
+verified = bg.get_verified_hypotheses()
+for h in verified:
+    print(f"{h.statement}: {'✓' if h.confidence == 1.0 else '✗'}")
+
+# Check prediction accuracy
+accuracy = bg.calculate_prediction_accuracy()
+print(f"Prediction accuracy: {accuracy:.1%}")
 ```
 
 ---
@@ -142,6 +163,21 @@ RETURN h1, r, h2
 ```cypher
 MATCH (e:Evidence)-[:AFFECTS]->(h:Hypothesis {id: 'H001'})
 RETURN e, h
+```
+
+#### Find verified hypotheses
+```cypher
+MATCH (h:Hypothesis)
+WHERE h.verified IS NOT NULL
+RETURN h.statement, h.confidence,
+       CASE WHEN h.confidence = 1.0 THEN 'Confirmed' ELSE 'Refuted' END as outcome
+```
+
+#### Find verification evidence
+```cypher
+MATCH (e:Evidence)-[v:VERIFIED_BY]->(h:Hypothesis)
+RETURN h.statement, e.content, v.verification_type, v.verified_date
+ORDER BY v.verified_date DESC
 ```
 
 #### Delete everything (careful!)
@@ -198,6 +234,29 @@ bg.add_contradiction("H004", contradicts="H005",
                     reason="Resource allocation conflict")
 ```
 
+### Example 3: Tracking Predictions with Verification
+
+```python
+# Create a time-bound prediction
+bg.add_hypothesis("H006", "GPT-5 will be released in 2024", 0.45)
+
+# Throughout 2024, evidence affects confidence
+bg.add_evidence("E003", "OpenAI hints at major announcement", "twitter.com/openai")
+bg.link_evidence_to_hypothesis("E003", "H006", strength=0.5, direction="supports")
+# H006 confidence: 45% → 52%
+
+# December 31, 2024 - Definitive verification
+bg.add_evidence("E004", "Year 2024 ends without GPT-5 release", "calendar")
+bg.verify_hypothesis("H006", "E004", verification_type="refuted")
+# H006 confidence: 52% → 0% (locked)
+# H006.verified: 2024-12-31
+
+# Analyze prediction accuracy
+print(f"Pre-verification confidence: 52%")
+print(f"Actual outcome: Refuted")
+print(f"Prediction was: Incorrect")
+```
+
 ---
 
 ## 🛠️ Configuration
@@ -237,6 +296,52 @@ ui:
 
 ---
 
+## 📔 Verification vs Bayesian Updates
+
+### Understanding the Difference
+
+**Bayesian Updates (AFFECTS relationship)**:
+- Gradual confidence changes based on evidence
+- Probabilistic reasoning
+- Confidence moves between 0% and 100%
+- Multiple pieces of evidence accumulate
+- Example: News about Tesla's progress affects FSD prediction
+
+**Verification (VERIFIED_BY relationship)**:
+- Definitive proof or disproof
+- Binary outcome: confirmed (100%) or refuted (0%)
+- Hypothesis becomes immutable after verification
+- Single piece of conclusive evidence
+- Example: December 31st proves/disproves a 2024 prediction
+
+### Verification Workflow
+
+```python
+# 1. Create prediction
+hypothesis = bg.add_hypothesis(
+    id="H007",
+    statement="Apple will release AR glasses in 2025",
+    confidence=0.60
+)
+
+# 2. Update confidence as evidence arrives (2024-2025)
+# ... multiple Bayesian updates ...
+
+# 3. Verification moment arrives (e.g., end of 2025)
+if apple_released_ar_glasses:
+    bg.verify_hypothesis("H007", evidence_id, "confirmed")
+    # Confidence → 1.0, verified → timestamp
+else:
+    bg.verify_hypothesis("H007", evidence_id, "refuted")
+    # Confidence → 0.0, verified → timestamp
+
+# 4. Analyze prediction accuracy
+print(f"Your confidence before verification: {pre_verification_confidence}")
+print(f"Actual outcome: {outcome}")
+```
+
+---
+
 ## 📊 Visualization
 
 ### Web UI (Coming Soon)
@@ -259,6 +364,12 @@ python -m bkms.cli history H001
 
 # Generate report
 python -m bkms.cli report --format=markdown
+
+# Show verified predictions
+python -m bkms.cli verified
+
+# Analyze prediction accuracy
+python -m bkms.cli accuracy --year=2024
 ```
 
 ---
@@ -360,4 +471,4 @@ Based on conversations about Bayesian reasoning and inspired by the principle:
 
 ---
 
-*Version 1.0 | Last Updated: 2025-01-02*
+*Version 1.1 | Last Updated: 2025-01-03*

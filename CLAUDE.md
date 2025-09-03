@@ -109,7 +109,8 @@ A graph-based belief tracking system that:
   id: STRING,           // Unique identifier (e.g., 'H001')
   statement: STRING,    // The belief statement
   confidence: FLOAT,    // Current confidence (0.0 - 1.0)
-  updated: DATETIME     // Last update timestamp
+  updated: DATETIME,    // Last update timestamp
+  verified: DATETIME    // When hypothesis was verified (NULL if unverified)
 })
 ```
 
@@ -125,11 +126,19 @@ A graph-based belief tracking system that:
 
 #### Relationship Types
 
-**Evidence → Hypothesis**
+**Evidence → Hypothesis (Probabilistic Update)**
 ```cypher
 (:Evidence)-[:AFFECTS {
   strength: FLOAT,      // Impact strength (0.0 - 1.0)
   direction: STRING     // 'supports' or 'contradicts'
+}]->(:Hypothesis)
+```
+
+**Evidence → Hypothesis (Definitive Verification)**
+```cypher
+(:Evidence)-[:VERIFIED_BY {
+  verified_date: DATETIME,  // When verification occurred
+  verification_type: STRING // 'confirmed' or 'refuted'
 }]->(:Hypothesis)
 ```
 
@@ -157,6 +166,10 @@ def bayesian_update(hypothesis, evidence, relationship):
         Updated confidence P(H|E)
     """
     
+    # Skip update if hypothesis is already verified
+    if hypothesis.verified is not None:
+        return hypothesis.confidence  # No updates after verification
+    
     # Current belief
     prior = hypothesis.confidence  # P(H)
     
@@ -178,7 +191,47 @@ def bayesian_update(hypothesis, evidence, relationship):
     return posterior
 ```
 
-### 2.4 Belief Propagation Algorithm
+### 2.4 Hypothesis Verification Process
+
+```python
+def verify_hypothesis(hypothesis, evidence, verification_type, neo4j_session):
+    """
+    Mark a hypothesis as definitively verified or refuted
+    
+    Args:
+        hypothesis: Hypothesis to verify
+        evidence: Evidence that provides definitive proof
+        verification_type: 'confirmed' or 'refuted'
+        neo4j_session: Neo4j database session
+    """
+    
+    # Create VERIFIED_BY relationship
+    query = """
+    MATCH (h:Hypothesis {id: $h_id}), (e:Evidence {id: $e_id})
+    CREATE (e)-[:VERIFIED_BY {
+        verified_date: datetime(),
+        verification_type: $v_type
+    }]->(h)
+    SET h.verified = datetime(),
+        h.confidence = CASE 
+            WHEN $v_type = 'confirmed' THEN 1.0 
+            ELSE 0.0 
+        END,
+        h.updated = datetime()
+    """
+    
+    neo4j_session.run(query, 
+                      h_id=hypothesis.id,
+                      e_id=evidence.id,
+                      v_type=verification_type)
+    
+    # Propagate verification impact to dependent hypotheses
+    if verification_type == 'refuted':
+        # If a hypothesis is refuted, dependent hypotheses need adjustment
+        propagate_verification_impact(hypothesis, neo4j_session)
+```
+
+### 2.5 Belief Propagation Algorithm
 
 ```python
 def propagate_belief_update(updated_hypothesis, neo4j_session):
@@ -251,6 +304,11 @@ POST   /api/evidence/{id}/link  # Link evidence to hypothesis
 POST   /api/update              # Trigger Bayesian update
 GET    /api/calculate           # Calculate signal/noise for given inputs
 
+# Verification Operations
+POST   /api/verify              # Verify or refute a hypothesis
+GET    /api/verified            # Get all verified hypotheses
+GET    /api/pending-verification # Get hypotheses awaiting verification
+
 # Graph Operations
 GET    /api/graph/dependencies  # Get dependency graph
 GET    /api/graph/contradictions # Find contradicting hypotheses
@@ -267,7 +325,8 @@ CREATE (h:Hypothesis {
   id: 'H001',
   statement: 'Tesla will achieve FSD Level 5 by 2026',
   confidence: 0.65,
-  updated: datetime()
+  updated: datetime(),
+  verified: NULL  // Not yet verified
 })
 
 // 2. Add evidence and link to hypothesis
@@ -293,6 +352,48 @@ RETURN h1, h2, r
 MATCH path = (h1:Hypothesis)-[:RELATES_TO*]->(h2:Hypothesis)
 WHERE h1.id = 'H001'
 RETURN path
+
+// 6. Create verification for a hypothesis
+MATCH (h:Hypothesis {id: 'H001'})
+CREATE (e:Evidence {
+  id: 'E_VERIFY_001',
+  content: 'Tesla officially announces Level 5 FSD certification',
+  source_url: 'https://tesla.com/fsd-level-5',
+  timestamp: datetime('2026-01-15')
+})
+CREATE (e)-[:VERIFIED_BY {
+  verified_date: datetime('2026-01-15'),
+  verification_type: 'confirmed'
+}]->(h)
+SET h.verified = datetime('2026-01-15'),
+    h.confidence = 1.0
+
+// 7. Find all verified hypotheses
+MATCH (h:Hypothesis)
+WHERE h.verified IS NOT NULL
+RETURN h.statement, h.confidence, h.verified,
+       CASE 
+         WHEN EXISTS((e)-[:VERIFIED_BY {verification_type: 'confirmed'}]->(h))
+         THEN 'Confirmed' 
+         ELSE 'Refuted' 
+       END as outcome
+
+// 8. Analyze prediction accuracy
+MATCH (h:Hypothesis)<-[v:VERIFIED_BY]-(e:Evidence)
+WHERE h.verified IS NOT NULL
+RETURN h.statement,
+       h.confidence as final_confidence,
+       v.verification_type,
+       e.content as verification_evidence,
+       h.verified as verification_date
+ORDER BY h.verified DESC
+
+// 9. Find hypotheses awaiting verification
+MATCH (h:Hypothesis)
+WHERE h.verified IS NULL 
+  AND h.statement CONTAINS '2024' 
+  AND date() > date('2024-12-31')
+RETURN h.statement as overdue_prediction, h.confidence
 ```
 
 ---
@@ -301,10 +402,12 @@ RETURN path
 
 ### Phase 1: Foundation (Week 1-2)
 - [x] Design data model
+- [x] Add verification mechanism to data model
 - [ ] Setup Neo4j database
 - [ ] Implement basic CRUD operations
 - [ ] Create CLI for hypothesis/evidence input
 - [ ] Manual confidence updates
+- [ ] Implement verification functionality
 
 ### Phase 2: Bayesian Engine (Week 3-4)
 - [ ] Implement Bayesian calculation module
@@ -361,7 +464,73 @@ class BayesianCalculator:
         return signal / noise
 ```
 
-### 5.2 Dependency Propagation
+### 5.2 Verification Handling
+
+```python
+class VerificationHandler:
+    @staticmethod
+    def verify_hypothesis(hypothesis_id, evidence_id, verification_type, session):
+        """
+        Handle hypothesis verification
+        
+        Args:
+            hypothesis_id: ID of hypothesis to verify
+            evidence_id: ID of evidence providing verification
+            verification_type: 'confirmed' or 'refuted'
+            session: Database session
+        """
+        # Set confidence based on verification
+        new_confidence = 1.0 if verification_type == 'confirmed' else 0.0
+        
+        # Update hypothesis
+        query = """
+        MATCH (h:Hypothesis {id: $h_id}), (e:Evidence {id: $e_id})
+        CREATE (e)-[:VERIFIED_BY {
+            verified_date: datetime(),
+            verification_type: $v_type
+        }]->(h)
+        SET h.verified = datetime(),
+            h.confidence = $conf,
+            h.updated = datetime()
+        RETURN h
+        """
+        
+        result = session.run(query, 
+                            h_id=hypothesis_id,
+                            e_id=evidence_id,
+                            v_type=verification_type,
+                            conf=new_confidence)
+        
+        return result.single()['h']
+    
+    @staticmethod
+    def check_verification_status(hypothesis_id, session):
+        """
+        Check if a hypothesis has been verified
+        
+        Returns:
+            None if not verified, or dict with verification details
+        """
+        query = """
+        MATCH (h:Hypothesis {id: $h_id})
+        OPTIONAL MATCH (h)<-[v:VERIFIED_BY]-(e:Evidence)
+        RETURN h.verified as verified_date,
+               v.verification_type as type,
+               e.content as evidence
+        """
+        
+        result = session.run(query, h_id=hypothesis_id).single()
+        
+        if result['verified_date']:
+            return {
+                'date': result['verified_date'],
+                'type': result['type'],
+                'evidence': result['evidence']
+            }
+        return None
+```
+
+### 5.3 Dependency Propagation
 
 ```python
 def propagate_with_dampening(graph, updated_node, dampening_factor=0.8):
@@ -413,7 +582,9 @@ def propagate_with_dampening(graph, updated_node, dampening_factor=0.8):
 
 ---
 
-## Appendix A: Example Scenario
+## Appendix A: Example Scenarios
+
+### Scenario 1: Bayesian Update (Probabilistic)
 
 ### Initial Setup
 ```
@@ -449,6 +620,52 @@ H2 impact = -21% × 0.8 = -16.8%
 H2 confidence: 50% → 33.2%
 ```
 
+### Scenario 2: Hypothesis Verification (Definitive)
+
+#### Initial Setup
+```
+H3: "GPT-5 will be released in 2024" (confidence: 45%)
+H4: "AI will surpass human performance on all benchmarks by 2025" (confidence: 30%)
+H4 DEPENDS_ON H3 (strength: 0.6)
+```
+
+#### Throughout 2024
+```
+E2: "OpenAI hints at major announcement" 
+E2 AFFECTS H3 (supports, strength: 0.5)
+H3 confidence: 45% → 52% (Bayesian update)
+
+E3: "Sam Altman tweets about 'something big coming'"
+E3 AFFECTS H3 (supports, strength: 0.4)
+H3 confidence: 52% → 57% (Bayesian update)
+```
+
+#### December 31, 2024 - Definitive Evidence
+```
+E4: "Year 2024 ends without GPT-5 release"
+E4 VERIFIED_BY H3 (refuted)
+
+H3 verified: 2024-12-31
+H3 confidence: 57% → 0% (Refuted)
+H3 no longer accepts Bayesian updates
+
+Propagation to H4:
+H4 confidence drops significantly due to dependency
+```
+
+#### Verification Impact
+```
+Pre-verification tracking:
+- H3 had 57% confidence before verification
+- Prediction was WRONG (refuted)
+- System can analyze: Was 57% confidence appropriate?
+
+Post-verification:
+- H3 is locked at 0% confidence
+- No future evidence can change H3
+- Historical record preserved for accuracy analysis
+```
+
 ---
 
 ## Appendix B: Key Insights from Conversations
@@ -463,7 +680,11 @@ H2 confidence: 50% → 33.2%
 
 5. **Contradiction Awareness**: Strong belief in contradicting hypotheses indicates cognitive dissonance
 
+6. **Verification Distinction**: Probabilistic updates (AFFECTS) vs definitive proof (VERIFIED_BY) serve different epistemological purposes
+
+7. **Prediction Tracking**: Verified hypotheses provide ground truth for calibrating confidence estimates
+
 ---
 
-*Last Updated: 2025-01-02*
-*Version: 1.0*
+*Last Updated: 2025-01-03*
+*Version: 1.1*
