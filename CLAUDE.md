@@ -127,7 +127,7 @@ A graph-based belief tracking system that:
   statement: STRING,    // The belief statement
   confidence: FLOAT,    // Current confidence (0.0 - 1.0)
   updated: DATETIME,    // Last update timestamp
-  verified: DATETIME    // When hypothesis was verified (NULL if unverified)
+  verified: DATETIME    // When hypothesis was verified (null if unverified)
 })
 ```
 
@@ -344,7 +344,7 @@ CREATE (h:Hypothesis {
   statement: 'Tesla will achieve FSD Level 5 by 2026',
   confidence: 0.65,
   updated: datetime(),
-  verified: NULL  // Not yet verified
+  verified: null  // Not yet verified
 })
 
 // 2. Add evidence and link to hypothesis
@@ -704,8 +704,8 @@ Post-verification:
 
 ---
 
-*Last Updated: 2025-01-03*
-*Version: 1.3*
+*Last Updated: 2025-09-03*
+*Version: 1.3.1*
 
 ---
 
@@ -735,6 +735,12 @@ Post-verification:
 - Store pre-verification confidence for accuracy analysis
 - Created comprehensive documentation for Bayesian calculations
 - Added troubleshooting guide for Neo4j relationship visualization
+
+### Maintenance Update (September 2025)
+- Use `null` (not `NULL`) in Cypher examples for unverified fields to match Neo4j literal and implementation
+- Ensure API returns ISO 8601 strings for datetime fields (`updated`, `verified`, evidence `timestamp`) consistently across endpoints
+- Corrected Next.js dynamic route parameter typing (internal refactor, no API change)
+- Updated app metadata (title/description) to BKMS
 
 ### Documentation Created
 - **BAYES_EXPLAIN.md**: Complete explanation of Bayesian logic and calculations

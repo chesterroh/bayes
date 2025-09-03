@@ -313,4 +313,10 @@ MIT License - See LICENSE file for details
 
 For detailed technical documentation and architecture, see [CLAUDE.md](CLAUDE.md)
 
-*Version 2.0 | Last Updated: January 2025*
+## 🔧 Maintenance Notes (September 2025)
+
+- Consistent datetime serialization: API responses return ISO 8601 strings for `updated`, `verified`, and evidence `timestamp` fields.
+- Internal quality fixes only: Corrected Next.js route param typing and improved delete semantics; no feature changes.
+- Cypher examples use `null` (not `NULL`) for unverified fields to match Neo4j literal.
+
+*Version 2.0.1 | Last Updated: September 2025*

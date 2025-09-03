@@ -24,7 +24,7 @@ export class HypothesisService {
           statement: $statement,
           confidence: $confidence,
           updated: datetime(),
-          verified: NULL
+          verified: null
         })
         RETURN h`,
         data
@@ -92,9 +92,10 @@ export class HypothesisService {
           id: node.properties.id,
           statement: node.properties.statement,
           confidence: node.properties.confidence,
-          updated: node.properties.updated,
-          verified: node.properties.verified,
-          verification_type: node.properties.verification_type || null
+          updated: formatDateTime(node.properties.updated),
+          verified: formatDateTime(node.properties.verified),
+          verification_type: node.properties.verification_type || null,
+          pre_verification_confidence: node.properties.pre_verification_confidence || null
         };
       });
     } finally {
@@ -207,12 +208,11 @@ export class HypothesisService {
     
     try {
       const result = await session.run(
-        'MATCH (h:Hypothesis {id: $id}) DETACH DELETE h RETURN count(h) as deleted',
+        'MATCH (h:Hypothesis {id: $id}) DETACH DELETE h RETURN 1 as deleted',
         { id }
       );
       
-      const deleted = result.records[0].get('deleted');
-      return deleted > 0;
+      return result.records.length > 0;
     } finally {
       await session.close();
     }

@@ -4,10 +4,10 @@ import { EvidenceService } from '@/lib/db/evidence';
 // POST /api/evidence/[id]/link - Link evidence to hypothesis
 export async function POST(
   request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
+  { params }: { params: { id: string } }
 ) {
   try {
-    const { id: evidenceId } = await params;
+    const { id: evidenceId } = params;
     const body = await request.json();
     
     // Validate required fields

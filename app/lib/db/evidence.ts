@@ -203,12 +203,11 @@ export class EvidenceService {
     
     try {
       const result = await session.run(
-        'MATCH (e:Evidence {id: $id}) DETACH DELETE e RETURN count(e) as deleted',
+        'MATCH (e:Evidence {id: $id}) DETACH DELETE e RETURN 1 as deleted',
         { id }
       );
       
-      const deleted = result.records[0].get('deleted');
-      return deleted > 0;
+      return result.records.length > 0;
     } finally {
       await session.close();
     }
