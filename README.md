@@ -2,12 +2,14 @@
 
 A personal belief tracking system using Bayesian probability and Neo4j graph database.
 
+🎆 **Current Status**: Backend API completed, Frontend UI in development
+
 ## 🚀 Quick Start
 
 ### Prerequisites
-- Python 3.8+
+- Node.js 18+ (for Next.js application)
 - Neo4j 4.4+ (Desktop or Docker)
-- Node.js 16+ (for web UI, optional)
+- npm or yarn package manager
 
 ### Installation
 
@@ -19,19 +21,28 @@ A personal belief tracking system using Bayesian probability and Neo4j graph dat
 
 2. **Clone the repository**
    ```bash
-   git clone https://github.com/yourusername/bkms.git
-   cd bkms
+   git clone https://github.com/chesterroh/bayes.git
+   cd bayes
    ```
 
-3. **Install Python dependencies**
+3. **Install Next.js dependencies**
    ```bash
-   pip install -r requirements.txt
+   cd app
+   npm install
    ```
 
 4. **Configure database connection**
    ```bash
-   cp .env.example .env
-   # Edit .env with your Neo4j credentials
+   # Already configured in app/.env.local
+   # Default: neo4j://localhost:7687
+   # Username: neo4j
+   # Password: neo4jneo4j
+   ```
+
+5. **Start the development server**
+   ```bash
+   npm run dev
+   # Application runs on http://localhost:3000
    ```
 
 ---
@@ -58,80 +69,107 @@ A personal belief tracking system using Bayesian probability and Neo4j graph dat
 
 ### Core Operations
 
-#### 1. Adding a Hypothesis
+#### 1. Adding a Hypothesis (via API)
 
-```python
-from bkms import BeliefGraph
+```bash
+# Create a new hypothesis
+curl -X POST http://localhost:3000/api/hypotheses \
+  -H "Content-Type: application/json" \
+  -d '{
+    "id": "H001",
+    "statement": "AI will significantly impact software development by 2025",
+    "confidence": 0.75
+  }'
 
-bg = BeliefGraph()
+# Get all hypotheses
+curl http://localhost:3000/api/hypotheses
 
-# Add a new hypothesis
-bg.add_hypothesis(
-    id="H001",
-    statement="AI will significantly impact software development by 2025",
-    confidence=0.75  # 75% confident
-)
+# Get specific hypothesis
+curl http://localhost:3000/api/hypotheses/H001
 ```
 
 #### 2. Adding Evidence
 
-```python
-# Add evidence
-bg.add_evidence(
-    id="E001",
-    content="GitHub Copilot adoption reaches 1 million developers",
-    source_url="https://github.blog/copilot-stats"
-)
+```bash
+# Create evidence
+curl -X POST http://localhost:3000/api/evidence \
+  -H "Content-Type: application/json" \
+  -d '{
+    "id": "E001",
+    "content": "GitHub Copilot adoption reaches 1 million developers",
+    "source_url": "https://github.blog/copilot-stats"
+  }'
 
 # Link evidence to hypothesis
-bg.link_evidence_to_hypothesis(
-    evidence_id="E001",
-    hypothesis_id="H001",
-    strength=0.8,  # Strong evidence
-    direction="supports"  # or "contradicts"
-)
+curl -X POST http://localhost:3000/api/evidence/E001/link \
+  -H "Content-Type: application/json" \
+  -d '{
+    "hypothesisId": "H001",
+    "strength": 0.8,
+    "direction": "supports"
+  }'
 ```
 
 #### 3. Updating Beliefs
 
-```python
-# Manual update
-bg.update_confidence("H001", new_confidence=0.82)
+```bash
+# Manual confidence update
+curl -X PUT http://localhost:3000/api/hypotheses/H001 \
+  -H "Content-Type: application/json" \
+  -d '{"confidence": 0.82}'
 
-# Automatic Bayesian update (probabilistic)
-bg.bayesian_update("H001", "E001")
+# Automatic Bayesian update
+curl -X POST http://localhost:3000/api/update \
+  -H "Content-Type: application/json" \
+  -d '{
+    "hypothesisId": "H001",
+    "evidenceId": "E001",
+    "propagate": true
+  }'
 
-# Definitive verification (sets confidence to 1.0 or 0.0)
-bg.verify_hypothesis(
-    hypothesis_id="H002",
-    evidence_id="E002",
-    verification_type="confirmed"  # or "refuted"
-)
+# Verify hypothesis (definitive proof)
+curl -X POST http://localhost:3000/api/verify \
+  -H "Content-Type: application/json" \
+  -d '{
+    "hypothesisId": "H002",
+    "evidenceId": "E002",
+    "verificationType": "confirmed"
+  }'
 ```
 
-#### 4. Querying Your Beliefs
+#### 4. TypeScript/JavaScript Client Example
 
-```python
-# Get current belief state
-belief = bg.get_hypothesis("H001")
-print(f"Belief: {belief.statement}")
-print(f"Confidence: {belief.confidence:.1%}")
-print(f"Verified: {belief.verified or 'Not yet'}")
+```typescript
+// In a Next.js component or page
+import { useEffect, useState } from 'react';
 
-# Find contradictions
-contradictions = bg.find_contradictions(min_confidence=0.7)
+interface Hypothesis {
+  id: string;
+  statement: string;
+  confidence: number;
+  verified: Date | null;
+}
 
-# Track belief evolution
-history = bg.get_belief_history("H001")
-
-# Get all verified predictions
-verified = bg.get_verified_hypotheses()
-for h in verified:
-    print(f"{h.statement}: {'✓' if h.confidence == 1.0 else '✗'}")
-
-# Check prediction accuracy
-accuracy = bg.calculate_prediction_accuracy()
-print(f"Prediction accuracy: {accuracy:.1%}")
+function BeliefTracker() {
+  const [hypotheses, setHypotheses] = useState<Hypothesis[]>([]);
+  
+  useEffect(() => {
+    fetch('/api/hypotheses')
+      .then(res => res.json())
+      .then(data => setHypotheses(data));
+  }, []);
+  
+  const addHypothesis = async (hypothesis: Hypothesis) => {
+    const response = await fetch('/api/hypotheses', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(hypothesis)
+    });
+    return response.json();
+  };
+  
+  // ... render hypotheses
+}
 ```
 
 ---
@@ -200,61 +238,49 @@ neo4j-admin load --from=backup.dump --database=neo4j --force
 
 ---
 
-## 🎯 Usage Examples
+## 🎯 API Endpoints
 
-### Example 1: Investment Thesis
+### Hypothesis Endpoints
+- `GET /api/hypotheses` - Get all hypotheses
+- `POST /api/hypotheses` - Create new hypothesis
+- `GET /api/hypotheses/[id]` - Get specific hypothesis
+- `PUT /api/hypotheses/[id]` - Update hypothesis confidence
+- `DELETE /api/hypotheses/[id]` - Delete hypothesis
 
-```python
-# Create investment hypothesis
-bg.add_hypothesis("H001", "Tesla stock will reach $400 by 2026", 0.60)
-bg.add_hypothesis("H002", "FSD will achieve Level 5 by 2025", 0.40)
-bg.add_hypothesis("H003", "EV market will grow 50% annually", 0.70)
+### Evidence Endpoints
+- `GET /api/evidence` - Get all evidence
+- `POST /api/evidence` - Create new evidence
+- `POST /api/evidence/[id]/link` - Link evidence to hypothesis
 
-# Create dependencies
-bg.add_dependency("H001", depends_on="H002", strength=0.8)
-bg.add_dependency("H001", depends_on="H003", strength=0.6)
+### Bayesian Operations
+- `POST /api/update` - Perform Bayesian update
+- `POST /api/verify` - Verify or refute hypothesis
 
-# Add evidence
-bg.add_evidence("E001", "Tesla FSD v12 shows major improvements", "twitter.com/tesla")
-bg.link_evidence_to_hypothesis("E001", "H002", strength=0.7, direction="supports")
+## 📋 Project Structure
 
-# Propagate updates
-bg.propagate_updates("H002")
 ```
-
-### Example 2: Technology Predictions
-
-```python
-# Create tech hypotheses
-bg.add_hypothesis("H004", "AGI will arrive before 2030", 0.35)
-bg.add_hypothesis("H005", "Quantum computing will break RSA by 2028", 0.25)
-
-# Track contradicting beliefs
-bg.add_contradiction("H004", contradicts="H005", 
-                    reason="Resource allocation conflict")
-```
-
-### Example 3: Tracking Predictions with Verification
-
-```python
-# Create a time-bound prediction
-bg.add_hypothesis("H006", "GPT-5 will be released in 2024", 0.45)
-
-# Throughout 2024, evidence affects confidence
-bg.add_evidence("E003", "OpenAI hints at major announcement", "twitter.com/openai")
-bg.link_evidence_to_hypothesis("E003", "H006", strength=0.5, direction="supports")
-# H006 confidence: 45% → 52%
-
-# December 31, 2024 - Definitive verification
-bg.add_evidence("E004", "Year 2024 ends without GPT-5 release", "calendar")
-bg.verify_hypothesis("H006", "E004", verification_type="refuted")
-# H006 confidence: 52% → 0% (locked)
-# H006.verified: 2024-12-31
-
-# Analyze prediction accuracy
-print(f"Pre-verification confidence: 52%")
-print(f"Actual outcome: Refuted")
-print(f"Prediction was: Incorrect")
+bayes/
+├── app/                        # Next.js application
+│   ├── app/                    # App router pages
+│   │   ├── api/                # API routes
+│   │   │   ├── hypotheses/     # Hypothesis endpoints
+│   │   │   ├── evidence/       # Evidence endpoints
+│   │   │   ├── update/         # Bayesian update
+│   │   │   └── verify/         # Verification endpoint
+│   │   ├── layout.tsx          # Root layout
+│   │   └── page.tsx            # Home page
+│   ├── lib/                    # Library code
+│   │   ├── neo4j.ts            # Neo4j connection
+│   │   └── db/                 # Database services
+│   │       ├── hypothesis.ts   # Hypothesis service
+│   │       ├── evidence.ts     # Evidence service
+│   │       └── bayesian.ts     # Bayesian calculations
+│   ├── public/                 # Static files
+│   ├── package.json            # Dependencies
+│   └── .env.local              # Environment variables
+├── CLAUDE.md                   # Technical documentation
+├── README.md                   # User guide (this file)
+└── test_neo4j_connection.py    # Neo4j test script
 ```
 
 ---
@@ -380,66 +406,77 @@ python -m bkms.cli accuracy --year=2024
 
 **Neo4j won't start**
 - Check if port 7687 is already in use
-- Verify Java is installed
-- Check Neo4j logs in Neo4j Desktop
+- Verify Neo4j Desktop is running
+- Check database is started in Neo4j Desktop
 
-**Connection refused**
+**API Connection refused**
 - Ensure Neo4j is running
-- Check credentials in .env
-- Verify firewall settings
+- Check credentials in `app/.env.local`
+- Verify Next.js server is running: `npm run dev`
 
-**Slow queries**
-- Create indexes:
+**TypeScript errors**
+- Run `npm install` in the app directory
+- Check Node.js version (18+ required)
+
+**Database already has data**
+- Clear database in Neo4j Browser:
   ```cypher
-  CREATE INDEX ON :Hypothesis(id);
-  CREATE INDEX ON :Evidence(id);
+  MATCH (n) DETACH DELETE n
   ```
 
-**Memory issues**
-- Increase Neo4j heap size in neo4j.conf
-- Limit query results with LIMIT clause
+**Slow queries**
+- Indexes are automatically created
+- Check Neo4j Browser for query performance
 
 ---
 
-## 📚 Advanced Topics
+## 📚 Development Guide
 
-### Custom Bayesian Calculations
+### Running Tests
 
-```python
-from bkms.bayesian import CustomCalculator
+```bash
+# Test Neo4j connection
+python3 test_neo4j_connection.py
 
-class MyCalculator(CustomCalculator):
-    def calculate_posterior(self, prior, evidence):
-        # Your custom logic here
-        pass
-
-bg.set_calculator(MyCalculator())
+# Run Next.js tests (when added)
+cd app
+npm test
 ```
 
-### Bulk Import
+### Adding New API Endpoints
 
-```python
-# Import from CSV
-bg.import_hypotheses("hypotheses.csv")
-bg.import_evidence("evidence.csv")
+Create a new route in `app/app/api/`:
 
-# Import from JSON
-bg.import_graph("beliefs.json")
+```typescript
+// app/app/api/custom/route.ts
+import { NextRequest, NextResponse } from 'next/server';
+import { getSession } from '@/lib/neo4j';
+
+export async function GET(request: NextRequest) {
+  const session = getSession();
+  try {
+    // Your Cypher query here
+    const result = await session.run('MATCH (n) RETURN n');
+    return NextResponse.json(result.records);
+  } finally {
+    await session.close();
+  }
+}
 ```
 
-### Export & Reporting
+### Extending the Data Model
 
-```python
-# Export to various formats
-bg.export_graph("beliefs.json", format="json")
-bg.export_graph("beliefs.gexf", format="gexf")  # For Gephi
+Add new node types or relationships in `lib/neo4j.ts`:
 
-# Generate reports
-report = bg.generate_report(
-    hypotheses=["H001", "H002"],
-    period="last_30_days",
-    include_evidence=True
-)
+```typescript
+export interface CustomNode {
+  id: string;
+  // Add your fields
+}
+
+export interface CustomRelationship {
+  // Define relationship properties
+}
 ```
 
 ---
@@ -471,4 +508,12 @@ Based on conversations about Bayesian reasoning and inspired by the principle:
 
 ---
 
-*Version 1.1 | Last Updated: 2025-01-03*
+*Version 1.2 | Last Updated: 2025-01-03*
+
+## 🚀 Current Implementation Status
+
+- ✅ **Backend**: Fully functional TypeScript/Node.js API
+- ✅ **Database**: Neo4j configured with all node types and relationships
+- ✅ **Bayesian Engine**: Complete with propagation and verification
+- 🏗️ **Frontend UI**: In development (React components pending)
+- 🔄 **Next Phase**: Building interactive UI components
