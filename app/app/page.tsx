@@ -85,6 +85,26 @@ export default function Dashboard() {
     setEvidence(evidence.filter(e => e.id !== id));
   };
 
+  const handleHypothesesRecomputed = async (updates: Array<{ id: string; updated: number | null }>) => {
+    if (!updates || updates.length === 0) return;
+    // Fetch the latest version for the affected hypotheses to sync timestamps and fields
+    try {
+      const refreshed = await Promise.all(
+        updates.map(u => hypothesisApi.getById(u.id).catch(() => null as any))
+      );
+      const valid = refreshed.filter(Boolean) as Hypothesis[];
+      if (valid.length > 0) {
+        setHypotheses(prev => {
+          const map = new Map(prev.map(h => [h.id, h]));
+          for (const h of valid) map.set(h.id, h);
+          return Array.from(map.values());
+        });
+      }
+    } catch (e) {
+      console.warn('Failed to refresh recomputed hypotheses:', e);
+    }
+  };
+
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
       {/* Header */}
@@ -164,6 +184,7 @@ export default function Dashboard() {
                   evidence={evidence}
                   onEvidenceUpdated={handleEvidenceUpdated}
                   onEvidenceDeleted={handleEvidenceDeleted}
+                  onHypothesesRecomputed={handleHypothesesRecomputed}
                 />
               </div>
             )}

@@ -101,11 +101,12 @@ export const evidenceApi = {
     return res.json();
   },
 
-  async delete(id: string): Promise<void> {
+  async delete(id: string): Promise<{ success: boolean; recomputed?: Array<{ id: string; updated: number | null }> }> {
     const res = await fetch(`${API_BASE}/evidence/${id}`, {
       method: 'DELETE',
     });
     if (!res.ok) throw new Error('Failed to delete evidence');
+    return res.json();
   },
 
   async linkToHypothesis(

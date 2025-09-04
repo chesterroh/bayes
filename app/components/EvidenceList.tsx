@@ -1,18 +1,20 @@
 'use client';
 
 import { useState } from 'react';
-import { Evidence, evidenceApi } from '@/lib/api-client';
+import { Evidence, evidenceApi, Hypothesis } from '@/lib/api-client';
 
 interface EvidenceListProps {
   evidence: Evidence[];
   onEvidenceUpdated?: (evidence: Evidence) => void;
   onEvidenceDeleted?: (id: string) => void;
+  onHypothesesRecomputed?: (updates: Array<{ id: string; updated: number | null }>) => void;
 }
 
 export default function EvidenceList({ 
   evidence, 
   onEvidenceUpdated,
-  onEvidenceDeleted 
+  onEvidenceDeleted,
+  onHypothesesRecomputed,
 }: EvidenceListProps) {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editContent, setEditContent] = useState('');
@@ -61,8 +63,11 @@ export default function EvidenceList({
   const handleDelete = async (id: string) => {
     if (confirm('Are you sure you want to delete this evidence? This will remove all links to hypotheses.')) {
       try {
-        await evidenceApi.delete(id);
+        const resp = await evidenceApi.delete(id);
         onEvidenceDeleted?.(id);
+        if (resp?.recomputed && resp.recomputed.length > 0) {
+          onHypothesesRecomputed?.(resp.recomputed);
+        }
       } catch (error) {
         console.error('Failed to delete evidence:', error);
         alert('Failed to delete evidence');
