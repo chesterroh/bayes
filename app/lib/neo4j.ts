@@ -44,8 +44,8 @@ export interface EvidenceNode {
 }
 
 export interface AffectsRelationship {
-  strength: number;
-  direction: 'supports' | 'contradicts';
+  p_e_given_h: number; // P(E|H)
+  p_e_given_not_h: number; // P(E|~H)
 }
 
 export interface VerifiedByRelationship {

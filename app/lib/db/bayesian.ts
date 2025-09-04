@@ -30,7 +30,7 @@ export class BayesianService {
       const result = await session.run(
         `MATCH (e:Evidence {id: $eId})-[r:AFFECTS]->(h:Hypothesis {id: $hId})
          WHERE h.verified IS NULL
-         RETURN h.confidence as confidence, r.strength as strength, r.direction as direction`,
+         RETURN h.confidence as confidence, r.p_e_given_h as peh, r.p_e_given_not_h as penh`,
         { hId: hypothesisId, eId: evidenceId }
       );
       
@@ -40,20 +40,8 @@ export class BayesianService {
       
       const record = result.records[0];
       const prior = record.get('confidence');
-      const strength = record.get('strength');
-      const direction = record.get('direction');
-      
-      // Calculate likelihoods based on direction
-      let likelihood: number;
-      let altLikelihood: number;
-      
-      if (direction === 'supports') {
-        likelihood = strength;
-        altLikelihood = 1 - strength;
-      } else {
-        likelihood = 1 - strength;
-        altLikelihood = strength;
-      }
+      const likelihood = record.get('peh');
+      const altLikelihood = record.get('penh');
       
       // Calculate posterior
       const posterior = this.calculatePosterior(prior, likelihood, altLikelihood);
@@ -160,24 +148,12 @@ export class BayesianService {
   // Calculate signal-to-noise ratio for a given evidence-hypothesis pair
   static calculateSignalNoiseRatio(
     prior: number,
-    strength: number,
-    direction: 'supports' | 'contradicts'
+    p_e_given_h: number,
+    p_e_given_not_h: number
   ): { signal: number; noise: number; ratio: number } {
-    let likelihood: number;
-    let altLikelihood: number;
-    
-    if (direction === 'supports') {
-      likelihood = strength;
-      altLikelihood = 1 - strength;
-    } else {
-      likelihood = 1 - strength;
-      altLikelihood = strength;
-    }
-    
-    const signal = likelihood * prior;
-    const noise = altLikelihood * (1 - prior);
+    const signal = p_e_given_h * prior;
+    const noise = p_e_given_not_h * (1 - prior);
     const ratio = noise === 0 ? Infinity : signal / noise;
-    
     return { signal, noise, ratio };
   }
 }

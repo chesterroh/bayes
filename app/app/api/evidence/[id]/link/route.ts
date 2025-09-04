@@ -11,25 +11,22 @@ export async function POST(
     const body = await request.json();
     
     // Validate required fields
-    if (!body.hypothesisId || body.strength === undefined || !body.direction) {
+    if (!body.hypothesisId || body.p_e_given_h === undefined || body.p_e_given_not_h === undefined) {
       return NextResponse.json(
-        { error: 'Missing required fields: hypothesisId, strength, direction' },
+        { error: 'Missing required fields: hypothesisId, p_e_given_h, p_e_given_not_h' },
         { status: 400 }
       );
     }
     
-    // Validate strength range
-    if (body.strength < 0 || body.strength > 1) {
+    // Validate probability ranges
+    const peh = Number(body.p_e_given_h);
+    const penh = Number(body.p_e_given_not_h);
+    if (
+      Number.isNaN(peh) || Number.isNaN(penh) ||
+      peh < 0 || peh > 1 || penh < 0 || penh > 1
+    ) {
       return NextResponse.json(
-        { error: 'Strength must be between 0 and 1' },
-        { status: 400 }
-      );
-    }
-    
-    // Validate direction
-    if (body.direction !== 'supports' && body.direction !== 'contradicts') {
-      return NextResponse.json(
-        { error: 'Direction must be either "supports" or "contradicts"' },
+        { error: 'p_e_given_h and p_e_given_not_h must be numbers between 0 and 1' },
         { status: 400 }
       );
     }
@@ -38,8 +35,8 @@ export async function POST(
       evidenceId,
       body.hypothesisId,
       {
-        strength: body.strength,
-        direction: body.direction
+        p_e_given_h: peh,
+        p_e_given_not_h: penh
       }
     );
     
@@ -55,8 +52,8 @@ export async function POST(
       evidenceId,
       hypothesisId: body.hypothesisId,
       relationship: {
-        strength: body.strength,
-        direction: body.direction
+        p_e_given_h: peh,
+        p_e_given_not_h: penh
       }
     });
   } catch (error) {

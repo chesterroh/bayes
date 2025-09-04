@@ -105,15 +105,15 @@ export class EvidenceService {
       const result = await session.run(
         `MATCH (e:Evidence {id: $eId}), (h:Hypothesis {id: $hId})
          CREATE (e)-[:AFFECTS {
-           strength: $strength,
-           direction: $direction
+           p_e_given_h: $p_e_given_h,
+           p_e_given_not_h: $p_e_given_not_h
          }]->(h)
          RETURN e, h`,
         {
           eId: evidenceId,
           hId: hypothesisId,
-          strength: relationship.strength,
-          direction: relationship.direction
+          p_e_given_h: relationship.p_e_given_h,
+          p_e_given_not_h: relationship.p_e_given_not_h
         }
       );
       
@@ -150,8 +150,8 @@ export class EvidenceService {
             timestamp: formatDateTime(node.properties.timestamp)
           },
           relationship: {
-            strength: rel.properties.strength,
-            direction: rel.properties.direction
+            p_e_given_h: rel.properties.p_e_given_h,
+            p_e_given_not_h: rel.properties.p_e_given_not_h
           }
         };
       });

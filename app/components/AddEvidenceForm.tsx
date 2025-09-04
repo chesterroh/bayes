@@ -24,8 +24,8 @@ export default function AddEvidenceForm({
     content: '',
     source_url: '',
     hypothesisId: '',
-    strength: 50,
-    direction: 'supports' as 'supports' | 'contradicts',
+    p_e_given_h: 50,
+    p_e_given_not_h: 50,
     performUpdate: true,
   });
 
@@ -127,8 +127,8 @@ export default function AddEvidenceForm({
           evidence.id,
           formData.hypothesisId,
           {
-            strength: formData.strength / 100,
-            direction: formData.direction,
+            p_e_given_h: formData.p_e_given_h / 100,
+            p_e_given_not_h: formData.p_e_given_not_h / 100,
           }
         );
         
@@ -153,8 +153,8 @@ export default function AddEvidenceForm({
         content: '',
         source_url: '',
         hypothesisId: '',
-        strength: 50,
-        direction: 'supports',
+        p_e_given_h: 50,
+        p_e_given_not_h: 50,
         performUpdate: true,
       });
       setSuggestedId('');
@@ -274,55 +274,38 @@ export default function AddEvidenceForm({
 
           {formData.hypothesisId && (
             <>
-              {/* Direction */}
+              {/* P(E|H) */}
               <div className="mt-3">
-                <label className="block text-sm text-gray-600 dark:text-gray-400 mb-1">
-                  Evidence Direction
-                </label>
-                <div className="flex gap-4">
-                  <label className="flex items-center">
-                    <input
-                      type="radio"
-                      value="supports"
-                      checked={formData.direction === 'supports'}
-                      onChange={(e) => setFormData({ ...formData, direction: e.target.value as 'supports' })}
-                      className="mr-2"
-                    />
-                    <span className="text-green-600 dark:text-green-400">Supports</span>
-                  </label>
-                  <label className="flex items-center">
-                    <input
-                      type="radio"
-                      value="contradicts"
-                      checked={formData.direction === 'contradicts'}
-                      onChange={(e) => setFormData({ ...formData, direction: e.target.value as 'contradicts' })}
-                      className="mr-2"
-                    />
-                  <span className="text-red-600 dark:text-red-400">Contradicts</span>
-                  </label>
-                </div>
-                <p className="mt-2 text-xs text-gray-500 dark:text-gray-400">
-                  Tip: "Supports" means the evidence is more likely if the hypothesis is true;
-                  "Contradicts" means it’s more likely if the hypothesis is false.
-                </p>
-              </div>
-
-              {/* Strength Slider */}
-              <div className="mt-3">
-                <label htmlFor="strength" className="block text-sm text-gray-600 dark:text-gray-400 mb-1">
-                  Evidence Strength: {formData.strength}%
+                <label htmlFor="peh" className="block text-sm text-gray-600 dark:text-gray-400 mb-1">
+                  P(Evidence | Hypothesis true): {formData.p_e_given_h}%
                 </label>
                 <input
                   type="range"
-                  id="strength"
+                  id="peh"
                   min="0"
                   max="100"
-                  value={formData.strength}
-                  onChange={(e) => setFormData({ ...formData, strength: parseInt(e.target.value) })}
+                  value={formData.p_e_given_h}
+                  onChange={(e) => setFormData({ ...formData, p_e_given_h: parseInt(e.target.value) })}
+                  className="w-full"
+                />
+              </div>
+
+              {/* P(E|~H) */}
+              <div className="mt-3">
+                <label htmlFor="penh" className="block text-sm text-gray-600 dark:text-gray-400 mb-1">
+                  P(Evidence | Hypothesis false): {formData.p_e_given_not_h}%
+                </label>
+                <input
+                  type="range"
+                  id="penh"
+                  min="0"
+                  max="100"
+                  value={formData.p_e_given_not_h}
+                  onChange={(e) => setFormData({ ...formData, p_e_given_not_h: parseInt(e.target.value) })}
                   className="w-full"
                 />
                 <div className="mt-2 text-xs text-gray-500 dark:text-gray-400">
-                  50% = neutral (no update). 60–70% = weak–moderate. 70–80% = strong. 90%+ = smoking gun.
+                  Tip: 50% / 50% is neutral. The greater the gap between these two, the more diagnostic the evidence.
                 </div>
               </div>
 
