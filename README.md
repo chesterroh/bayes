@@ -138,8 +138,7 @@ node test-api.js                    # Run API tests (server must be running)
 4. Enter evidence content and source URL
 5. Optionally link to a hypothesis:
    - Select target hypothesis
-   - Set strength (0-100%)
-   - Choose direction (supports/contradicts)
+   - Provide P(E|H) and P(E|~H) (0–100%)
    - Enable Bayesian update
 6. Click "Create Evidence"
 
@@ -185,8 +184,8 @@ node test-api.js                    # Run API tests (server must be running)
 ### Relationships
 
 - **AFFECTS**: Evidence → Hypothesis (probabilistic update)
-  - `strength`: 0.0 to 1.0
-  - `direction`: 'supports' | 'contradicts'
+  - `p_e_given_h`: P(E|H) in [0.0, 1.0]
+  - `p_e_given_not_h`: P(E|~H) in [0.0, 1.0]
 
 - **VERIFIED_BY**: Evidence → Hypothesis (definitive proof)
   - `verified_date`: When verified
@@ -210,7 +209,7 @@ Where:
 
 ### Example Update
 1. Initial belief: "AI will transform software by 2025" (60% confidence)
-2. Evidence: "GitHub Copilot reaches 1M users" (supports, strength: 0.8)
+2. Evidence: "GitHub Copilot reaches 1M users" with P(E|H)=0.8, P(E|~H)=0.2
 3. Calculation:
    - Signal = 0.8 × 0.6 = 0.48
    - Noise = 0.2 × 0.4 = 0.08
@@ -232,7 +231,7 @@ Where:
 - `GET /api/evidence/[id]` - Get specific evidence
 - `PUT /api/evidence/[id]` - Update evidence
 - `DELETE /api/evidence/[id]` - Delete evidence
-- `POST /api/evidence/[id]/link` - Link to hypothesis
+- `POST /api/evidence/[id]/link` - Link to hypothesis with P(E|H), P(E|~H)
 
 ### Bayesian Operations
 - `POST /api/update` - Perform Bayesian update

@@ -83,8 +83,8 @@ P(H|E) = Signal / (Signal + Noise)
 // From app/lib/db/bayesian.ts
 static calculatePosterior(
   prior: number,           // Current belief (0.0 to 1.0)
-  likelihood: number,      // P(E|H) - how likely evidence if true
-  altLikelihood: number    // P(E|~H) - how likely evidence if false
+  likelihood: number,      // P(E|H) - how likely the evidence if the hypothesis is true
+  altLikelihood: number    // P(E|~H) - how likely the evidence if the hypothesis is false
 ): number {
   const signal = likelihood * prior;
   const noise = altLikelihood * (1 - prior);
@@ -97,23 +97,13 @@ static calculatePosterior(
 }
 ```
 
-### 2. Direction and Strength Translation
+### 2. User-Provided Likelihoods
 
-When users input evidence, they provide:
-- **Strength**: 0-100% (how diagnostic is this evidence?)
-- **Direction**: "supports" or "contradicts"
+When users input evidence, they now provide the likelihoods directly:
+- `P(E|H)` – probability of observing the evidence if the hypothesis is true
+- `P(E|~H)` – probability of observing the evidence if the hypothesis is false
 
-This translates to likelihoods:
-
-```typescript
-if (direction === 'supports') {
-  likelihood = strength;           // P(E|H)
-  altLikelihood = 1 - strength;   // P(E|~H)
-} else { // contradicts
-  likelihood = 1 - strength;       // P(E|H)
-  altLikelihood = strength;       // P(E|~H)
-}
-```
+These feed straight into the calculation as `likelihood` and `altLikelihood`.
 
 ### 3. Complete Update Process
 
@@ -122,18 +112,12 @@ static async updateHypothesis(
   hypothesisId: string,
   evidenceId: string
 ): Promise<{ oldConfidence: number; newConfidence: number }> {
-  // 1. Get current confidence (prior)
-  const prior = hypothesis.confidence;
-  
-  // 2. Get evidence relationship
-  const strength = relationship.strength;
-  const direction = relationship.direction;
-  
-  // 3. Calculate likelihoods
-  const [likelihood, altLikelihood] = 
-    direction === 'supports' 
-      ? [strength, 1 - strength]
-      : [1 - strength, strength];
+// 1. Get current confidence (prior)
+const prior = hypothesis.confidence;
+ 
+// 2. Get evidence relationship (likelihoods)
+const likelihood = relationship.p_e_given_h;      // P(E|H)
+const altLikelihood = relationship.p_e_given_not_h; // P(E|~H)
   
   // 4. Apply Bayes' theorem
   const posterior = calculatePosterior(prior, likelihood, altLikelihood);
@@ -152,27 +136,20 @@ static async updateHypothesis(
 ### What Users See vs What Happens
 
 | User Input | Internal Meaning | Mathematical Impact |
-|------------|------------------|-------------------|
-| **Strength: 80%** | Evidence is 80% diagnostic | Strong update |
-| **Strength: 50%** | Evidence is non-informative | No update |
-| **Strength: 20%** | Evidence is weakly diagnostic | Small update |
-| **Direction: Supports** | Evidence more likely if H true | Increases confidence |
-| **Direction: Contradicts** | Evidence more likely if H false | Decreases confidence |
+|------------|------------------|---------------------|
+| P(E|H) = 0.80 | Evidence is likely if H true | Increases confidence (if > P(E|~H)) |
+| P(E|~H) = 0.20 | Evidence is unlikely if H false | Increases confidence |
+| P(E|H) = 0.50, P(E|~H) = 0.50 | Evidence is non-informative | No update |
+| P(E|H) < P(E|~H) | Evidence is more likely if H false | Decreases confidence |
 
-### Interpreting Strength Values
+### Interpreting Likelihood Values
 
-The **strength** parameter answers the question:
-> "How much more likely is this evidence if my hypothesis is TRUE vs FALSE?"
+Ask: "How often would I expect this evidence if the hypothesis were true vs false?"
 
-#### For Supporting Evidence:
-- **90% strength** = "I'd see this evidence 90% of the time if TRUE, only 10% if FALSE"
-- **70% strength** = "I'd see this evidence 70% of the time if TRUE, 30% if FALSE"
-- **50% strength** = "This evidence tells me nothing" (equally likely either way)
-
-#### For Contradicting Evidence:
-- **90% strength** = "I'd see this evidence only 10% of the time if TRUE, 90% if FALSE"
-- **70% strength** = "I'd see this evidence 30% of the time if TRUE, 70% if FALSE"
-- **50% strength** = "This evidence tells me nothing" (equally likely either way)
+- Strongly supporting: P(E|H) high, P(E|~H) low (e.g., 0.9 vs 0.1)
+- Strongly contradicting: P(E|H) low, P(E|~H) high (e.g., 0.2 vs 0.8)
+- Neutral: P(E|H) ≈ P(E|~H) (e.g., 0.5 vs 0.5)
+- Diagnosticity increases with the gap |P(E|H) − P(E|~H)| or the likelihood ratio P(E|H)/P(E|~H)
 
 ---
 
@@ -184,15 +161,14 @@ The **strength** parameter answers the question:
 - Hypothesis: "AI will transform software development by 2025"
 - Current confidence: 60%
 - Evidence: "GitHub Copilot reaches 1 million users"
-- User inputs: Strength = 80%, Direction = Supports
+- User inputs: P(E|H) = 0.80, P(E|~H) = 0.20
 
 **Calculation**:
 ```
 Prior = 0.60
 
-Since direction = "supports" and strength = 0.80:
-  likelihood = 0.80      (P(E|H) - 80% chance if hypothesis true)
-  altLikelihood = 0.20   (P(E|~H) - 20% chance if hypothesis false)
+likelihood = 0.80      (P(E|H) - 80% chance if hypothesis true)
+altLikelihood = 0.20   (P(E|~H) - 20% chance if hypothesis false)
 
 Signal = 0.80 × 0.60 = 0.48
 Noise = 0.20 × 0.40 = 0.08
@@ -210,15 +186,14 @@ Result: Confidence increases to 85.7%
 - Hypothesis: "Tesla will achieve full self-driving by 2024"
 - Current confidence: 45%
 - Evidence: "NHTSA opens investigation into Tesla Autopilot crashes"
-- User inputs: Strength = 70%, Direction = Contradicts
+- User inputs: P(E|H) = 0.30, P(E|~H) = 0.70
 
 **Calculation**:
 ```
 Prior = 0.45
 
-Since direction = "contradicts" and strength = 0.70:
-  likelihood = 0.30      (P(E|H) - 30% chance if hypothesis true)
-  altLikelihood = 0.70   (P(E|~H) - 70% chance if hypothesis false)
+likelihood = 0.30      (P(E|H) - 30% chance if hypothesis true)
+altLikelihood = 0.70   (P(E|~H) - 70% chance if hypothesis false)
 
 Signal = 0.30 × 0.45 = 0.135
 Noise = 0.70 × 0.55 = 0.385
@@ -236,15 +211,14 @@ Result: Confidence decreases to 26%
 - Hypothesis: "Quantum computing will break encryption by 2030"
 - Current confidence: 35%
 - Evidence: "IBM announces 433-qubit processor"
-- User inputs: Strength = 55%, Direction = Supports
+- User inputs: P(E|H) = 0.55, P(E|~H) = 0.45
 
 **Calculation**:
 ```
 Prior = 0.35
 
-Since direction = "supports" and strength = 0.55:
-  likelihood = 0.55
-  altLikelihood = 0.45
+likelihood = 0.55
+altLikelihood = 0.45
 
 Signal = 0.55 × 0.35 = 0.1925
 Noise = 0.45 × 0.65 = 0.2925
@@ -323,7 +297,7 @@ Posterior = likelihood / likelihood = 1.0 (unchanged)
 
 ### 2. Equal Likelihoods
 
-If strength = 50%, no update occurs:
+If P(E|H) = P(E|~H) = 0.5, no update occurs:
 
 ```
 likelihood = 0.5
@@ -347,7 +321,7 @@ Right: Each evidence applied once
 H: 60% → E1 → 85% → E2 → 92%
 ```
 
-**Implementation**: The system tracks Evidence-Hypothesis links to prevent duplicates.
+**Implementation**: Create at most one Evidence→Hypothesis link per pair to avoid double counting.
 
 ### 4. Correlated Evidence
 
@@ -399,7 +373,7 @@ These aren't independent! The second provides minimal additional information.
 
 ### Q6: What about degrees of confidence in evidence?
 
-**A**: The strength parameter captures this. Uncertain evidence should have strength closer to 50% (less diagnostic).
+**A**: Use likelihoods directly. Uncertain evidence has P(E|H) close to P(E|~H); strongly diagnostic evidence separates them.
 
 ---
 
@@ -419,4 +393,4 @@ This creates a complete epistemological system for rational belief management.
 *For implementation details, see [CLAUDE.md](CLAUDE.md)*  
 *For usage instructions, see [README.md](README.md)*
 
-*Last Updated: January 2025*
+*Last Updated: September 2025*

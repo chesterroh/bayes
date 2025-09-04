@@ -146,8 +146,8 @@ A graph-based belief tracking system that:
 **Evidence → Hypothesis (Probabilistic Update)**
 ```cypher
 (:Evidence)-[:AFFECTS {
-  strength: FLOAT,      // Impact strength (0.0 - 1.0)
-  direction: STRING     // 'supports' or 'contradicts'
+  p_e_given_h: FLOAT,        // P(E|H)
+  p_e_given_not_h: FLOAT     // P(E|~H)
 }]->(:Hypothesis)
 ```
 
@@ -177,7 +177,7 @@ def bayesian_update(hypothesis, evidence, relationship):
     Args:
         hypothesis: Current hypothesis node with confidence P(H)
         evidence: New evidence node
-        relationship: AFFECTS relationship with strength and direction
+        relationship: AFFECTS relationship with P(E|H) and P(E|~H)
     
     Returns:
         Updated confidence P(H|E)
@@ -190,13 +190,9 @@ def bayesian_update(hypothesis, evidence, relationship):
     # Current belief
     prior = hypothesis.confidence  # P(H)
     
-    # Evidence impact
-    if relationship.direction == 'supports':
-        likelihood = relationship.strength  # P(E|H)
-        alt_likelihood = 1 - relationship.strength  # P(E|~H)
-    else:  # contradicts
-        likelihood = 1 - relationship.strength  # P(E|H)
-        alt_likelihood = relationship.strength  # P(E|~H)
+    # Evidence impact (direct likelihoods)
+    likelihood = relationship.p_e_given_h       # P(E|H)
+    alt_likelihood = relationship.p_e_given_not_h  # P(E|~H)
     
     # Calculate signal and noise
     signal = likelihood * prior  # P(E|H) × P(H)
@@ -355,7 +351,7 @@ CREATE (e:Evidence {
   source_url: 'https://twitter.com/tesla/...',
   timestamp: datetime()
 })
-CREATE (e)-[:AFFECTS {strength: 0.7, direction: 'supports'}]->(h)
+CREATE (e)-[:AFFECTS {p_e_given_h: 0.7, p_e_given_not_h: 0.3}]->(h)
 
 // 3. Find all hypotheses affected by evidence
 MATCH (e:Evidence {id: 'E001'})-[:AFFECTS]->(h:Hypothesis)
@@ -614,13 +610,13 @@ H2 DEPENDS_ON H1 (strength: 0.8)
 ### Evidence Arrives
 ```
 E1: "Boston Dynamics delays product 2 years"
-E1 AFFECTS H1 (contradicts, strength: 0.7)
+E1 AFFECTS H1 (P(E|H)=0.30, P(E|~H)=0.70)
 ```
 
 ### Bayesian Update
 ```
 Prior P(H1) = 0.60
-Likelihood P(E1|H1) = 0.30 (contradicts with strength 0.7)
+Likelihood P(E1|H1) = 0.30
 Alt-likelihood P(E1|~H1) = 0.70
 
 Signal = 0.30 × 0.60 = 0.18
@@ -650,11 +646,11 @@ H4 DEPENDS_ON H3 (strength: 0.6)
 #### Throughout 2024
 ```
 E2: "OpenAI hints at major announcement" 
-E2 AFFECTS H3 (supports, strength: 0.5)
+E2 AFFECTS H3 (P(E|H)=0.50, P(E|~H)=0.50)
 H3 confidence: 45% → 52% (Bayesian update)
 
 E3: "Sam Altman tweets about 'something big coming'"
-E3 AFFECTS H3 (supports, strength: 0.4)
+E3 AFFECTS H3 (P(E|H)=0.60, P(E|~H)=0.40)
 H3 confidence: 52% → 57% (Bayesian update)
 ```
 

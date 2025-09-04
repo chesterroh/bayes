@@ -4,10 +4,10 @@ import { HypothesisService } from '@/lib/db/hypothesis';
 // GET /api/hypotheses/[id] - Get specific hypothesis
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const { id } = params;
+    const { id } = await params;
     const hypothesis = await HypothesisService.getById(id);
     
     if (!hypothesis) {
@@ -30,10 +30,10 @@ export async function GET(
 // PUT /api/hypotheses/[id] - Update hypothesis confidence
 export async function PUT(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const { id } = params;
+    const { id } = await params;
     const body = await request.json();
     
     if (body.confidence === undefined) {
@@ -72,10 +72,10 @@ export async function PUT(
 // DELETE /api/hypotheses/[id] - Delete hypothesis
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const { id } = params;
+    const { id } = await params;
     const deleted = await HypothesisService.delete(id);
     
     if (!deleted) {
