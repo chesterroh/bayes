@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { EvidenceService } from '@/lib/db/evidence';
 import { HypothesisService } from '@/lib/db/hypothesis';
 import { BayesianService } from '@/lib/db/bayesian';
+import { getSession } from '@/lib/neo4j';
 
 // POST /api/evidence/[id]/link - Link evidence to hypothesis
 export async function POST(
@@ -52,6 +53,38 @@ export async function POST(
         { error: 'AFFECTS link already exists for this evidence and hypothesis' },
         { status: 409 }
       );
+    }
+
+    // Backfill base_confidence if missing using current state before creating link
+    try {
+      const session = getSession();
+      const EPS = 1e-6;
+      try {
+        const snap = await session.run(
+          `MATCH (h:Hypothesis {id: $hId})
+           OPTIONAL MATCH (e2:Evidence)-[r:AFFECTS]->(h)
+           RETURN h.confidence as conf, collect({peh:r.p_e_given_h, penh:r.p_e_given_not_h}) as rels` ,
+          { hId: body.hypothesisId }
+        );
+        if (snap.records.length > 0 && (hyp.base_confidence == null)) {
+          const conf = snap.records[0].get('conf');
+          const rels = (snap.records[0].get('rels') || []).map((x: any) => ({ peh: Number(x.peh), penh: Number(x.penh) }));
+          const post = Math.min(1 - EPS, Math.max(EPS, Number(conf)));
+          let postOdds = post / (1 - post);
+          let denom = 1.0;
+          for (const r of rels) {
+            if (!Number.isFinite(r.peh) || !Number.isFinite(r.penh)) continue;
+            denom *= Math.max(EPS, r.peh / Math.max(EPS, r.penh));
+          }
+          const baseOdds = Math.max(EPS, postOdds / Math.max(EPS, denom));
+          const base = baseOdds / (1 + baseOdds);
+          await HypothesisService.setBaseConfidence(body.hypothesisId, base);
+        }
+      } finally {
+        await session.close();
+      }
+    } catch (e) {
+      console.warn('Failed to backfill base_confidence before link POST:', e);
     }
 
     const linked = await EvidenceService.linkToHypothesis(
@@ -134,6 +167,38 @@ export async function PUT(
       );
     }
 
+    // If base_confidence missing, infer it from current state before modifying link
+    try {
+      const session = getSession();
+      const EPS = 1e-6;
+      try {
+        const snap = await session.run(
+          `MATCH (h:Hypothesis {id: $hId})
+           OPTIONAL MATCH (e2:Evidence)-[r:AFFECTS]->(h)
+           RETURN h.confidence as conf, collect({peh:r.p_e_given_h, penh:r.p_e_given_not_h}) as rels` ,
+          { hId: body.hypothesisId }
+        );
+        if (snap.records.length > 0 && (hyp.base_confidence == null)) {
+          const conf = snap.records[0].get('conf');
+          const rels = (snap.records[0].get('rels') || []).map((x: any) => ({ peh: Number(x.peh), penh: Number(x.penh) }));
+          const post = Math.min(1 - EPS, Math.max(EPS, Number(conf)));
+          let postOdds = post / (1 - post);
+          let denom = 1.0;
+          for (const r of rels) {
+            if (!Number.isFinite(r.peh) || !Number.isFinite(r.penh)) continue;
+            denom *= Math.max(EPS, r.peh / Math.max(EPS, r.penh));
+          }
+          const baseOdds = Math.max(EPS, postOdds / Math.max(EPS, denom));
+          const base = baseOdds / (1 + baseOdds);
+          await HypothesisService.setBaseConfidence(body.hypothesisId, base);
+        }
+      } finally {
+        await session.close();
+      }
+    } catch (e) {
+      console.warn('Failed to backfill base_confidence before link PUT:', e);
+    }
+
     const ok = await EvidenceService.updateLink(evidenceId, body.hypothesisId, { p_e_given_h: peh, p_e_given_not_h: penh });
     if (!ok) {
       return NextResponse.json({ error: 'Failed to update link' }, { status: 500 });
@@ -184,6 +249,38 @@ export async function DELETE(
         { error: 'Link not found for given evidence and hypothesis' },
         { status: 404 }
       );
+    }
+
+    // If base_confidence missing, infer it from current state before removing link
+    try {
+      const session = getSession();
+      const EPS = 1e-6;
+      try {
+        const snap = await session.run(
+          `MATCH (h:Hypothesis {id: $hId})
+           OPTIONAL MATCH (e2:Evidence)-[r:AFFECTS]->(h)
+           RETURN h.confidence as conf, collect({peh:r.p_e_given_h, penh:r.p_e_given_not_h}) as rels` ,
+          { hId: String(hypothesisId) }
+        );
+        if (snap.records.length > 0 && (hyp.base_confidence == null)) {
+          const conf = snap.records[0].get('conf');
+          const rels = (snap.records[0].get('rels') || []).map((x: any) => ({ peh: Number(x.peh), penh: Number(x.penh) }));
+          const post = Math.min(1 - EPS, Math.max(EPS, Number(conf)));
+          let postOdds = post / (1 - post);
+          let denom = 1.0;
+          for (const r of rels) {
+            if (!Number.isFinite(r.peh) || !Number.isFinite(r.penh)) continue;
+            denom *= Math.max(EPS, r.peh / Math.max(EPS, r.penh));
+          }
+          const baseOdds = Math.max(EPS, postOdds / Math.max(EPS, denom));
+          const base = baseOdds / (1 + baseOdds);
+          await HypothesisService.setBaseConfidence(String(hypothesisId), base);
+        }
+      } finally {
+        await session.close();
+      }
+    } catch (e) {
+      console.warn('Failed to backfill base_confidence before link DELETE:', e);
     }
 
     const deleted = await EvidenceService.deleteLink(evidenceId, String(hypothesisId));

@@ -205,6 +205,25 @@ export class HypothesisService {
       await session.close();
     }
   }
+
+  // Set base_confidence (immutable initializer). Only set if currently null/undefined unless force=true
+  static async setBaseConfidence(id: string, base: number, force: boolean = false): Promise<boolean> {
+    const session = getSession();
+    try {
+      const result = await session.run(
+        force
+          ? `MATCH (h:Hypothesis {id: $id}) SET h.base_confidence = $base RETURN 1 as ok`
+          : `MATCH (h:Hypothesis {id: $id})
+             WHERE h.base_confidence IS NULL
+             SET h.base_confidence = $base
+             RETURN 1 as ok`,
+        { id, base }
+      );
+      return result.records.length > 0;
+    } finally {
+      await session.close();
+    }
+  }
   
   // Delete a hypothesis
   static async delete(id: string): Promise<boolean> {
