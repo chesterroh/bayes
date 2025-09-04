@@ -33,6 +33,8 @@ BKMS helps you:
   - ⏳ Pending - Hypothesis under evaluation
   - ✓ Confirmed - Hypothesis proven true
   - ✗ Refuted - Hypothesis proven false
+ - **AI Suggestions & Chat (optional)**: When a hypothesis is selected and evidence text is present, Gemini suggests P(E|H) and P(E|~H) with rationale, and you can chat to refine reasoning. Suggestions never overwrite your sliders unless you click Apply.
+ - **X.com Auto-fill**: Paste an X/Twitter status URL into Source URL and the evidence text auto-fills (best-effort, no API keys).
 
 ## 🛠️ Technology Stack
 
@@ -92,6 +94,11 @@ Create `.env.local` in the `app` directory:
 NEO4J_URI=bolt://localhost:7687
 NEO4J_USER=neo4j
 NEO4J_PASSWORD=neo4jneo4j
+
+# Optional: enable Gemini AI suggestions & chat
+GEMINI_API_KEY=your_gemini_api_key
+# Optional: pick a model; falls back to gemini-1.5-pro if unavailable
+GEMINI_MODEL=gemini-2.5-pro
 ```
 
 ### 7. Start the Application
@@ -110,7 +117,6 @@ Run `./help.sh` to see all available commands, or:
 ```bash
 # Database Management
 ./clear-db.sh                      # Clear database (with confirmation)
-./clear-db-force.sh                 # Clear database (no confirmation)
 cd app && node scripts/check-database.js  # Check database status
 
 # Development
@@ -119,7 +125,7 @@ cd app && npm run build             # Build for production
 cd app && npm start                 # Run production build
 
 # Testing
-node test-api.js                    # Run API tests (server must be running)
+See TEST_GUIDE.md for curl-based API tests
 ```
 
 ## 🎮 Using the Application
@@ -154,6 +160,8 @@ node test-api.js                    # Run API tests (server must be running)
 - **Edit**: Click ✏️ to modify content or source
 - **Delete**: Click 🗑️ to remove (requires confirmation)
 - **Link**: Connect to hypotheses during creation
+- **X.com Auto-fill**: If Source URL is an X/Twitter status link, the Content box auto-fills with tweet text (best-effort; no official X API).
+- **AI Suggestions**: After selecting a hypothesis and writing Content, an AI panel suggests P(E|H) and P(E|~H) with a rationale. Click Apply to copy suggestions to the sliders, or adjust manually. Use the built‑in chat to ask follow-up questions. Pressing Enter in chat sends a message (does not submit the form).
 
 ## 🗄️ Database Schema
 
@@ -216,6 +224,15 @@ Where:
    - Posterior = 0.48 / (0.48 + 0.08) = 85.7%
 4. Updated confidence: 85.7%
 
+### Evidence Deletion & Recompute
+
+When you delete an evidence item (or remove a link to a hypothesis), the hypothesis confidence is recomputed from its immutable base prior using all remaining evidence:
+
+- Base prior is stored as `base_confidence` on the hypothesis when it is created.
+- Recompute uses odds form and multiplies likelihood ratios LR = P(E|H)/P(E|~H) for each remaining AFFECTS link (order‑independent under conditional independence).
+- Verified hypotheses are locked and not recomputed.
+- The DELETE evidence API returns which hypotheses were recomputed.
+
 ## 🎯 API Reference
 
 ### Hypothesis Endpoints
@@ -230,7 +247,7 @@ Where:
 - `POST /api/evidence` - Create evidence
 - `GET /api/evidence/[id]` - Get specific evidence
 - `PUT /api/evidence/[id]` - Update evidence
-- `DELETE /api/evidence/[id]` - Delete evidence
+- `DELETE /api/evidence/[id]` - Delete evidence and recompute linked hypotheses from base prior; returns `{ success, recomputed: [{ id, updated }] }`
 - `POST /api/evidence/[id]/link` - Link to hypothesis with P(E|H), P(E|~H)
 
 ### Bayesian Operations
@@ -240,6 +257,11 @@ Where:
 ### Utility Endpoints
 - `GET /api/next-id?type=hypothesis|evidence` - Get next available ID
 - `GET /api/check-id?type=hypothesis|evidence&id=XXX` - Check if ID exists
+
+### AI & Extraction Endpoints
+- `GET /api/extract/x?url=<x_status_url>` - Best-effort text extraction for X/Twitter links (oEmbed + syndication fallback)
+- `POST /api/llm/suggest` - Given hypothesis (id, statement, prior) and evidence text, returns `{ p_e_given_h, p_e_given_not_h, rationale }` using Gemini
+- `POST /api/llm/chat` - Synchronous chat with Gemini using current hypothesis/evidence as context; returns `{ reply }`
 
 ## 📊 Neo4j Queries
 
@@ -318,5 +340,17 @@ For detailed technical documentation and architecture, see [CLAUDE.md](CLAUDE.md
 - Internal quality fixes only: Corrected Next.js route param typing and improved delete semantics; no feature changes.
 - Cypher examples use `null` (not `NULL`) for unverified fields to match Neo4j literal.
 - Evidence model updated: AFFECTS now uses explicit probabilities `P(E|H)` and `P(E|~H)` instead of `direction` + `strength`.
+- Evidence delete semantics: Deleting evidence triggers recomputation of linked hypotheses from `base_confidence` using LR products. Verified hypotheses are locked.
+- Hypothesis base prior: New hypotheses store `base_confidence` at creation. Existing nodes recompute with `confidence` as fallback base if missing.
+### AI Suggestions/Chat Issues
+- Ensure `GEMINI_API_KEY` is present in `app/.env.local` or environment
+- If `gemini-2.5-pro` is unavailable, the server falls back to `gemini-1.5-pro`
+- Chat is synchronous (non‑streaming); a full reply appears after a short delay
+
+### X/Twitter Extraction Limitations
+- Without the official X API, extraction relies on public oEmbed and an undocumented syndication endpoint
+- Some long posts or threads may still be truncated; we take the longer of the two sources when possible
+- AI support: Optional Gemini-powered suggestions (`/api/llm/suggest`) and chat (`/api/llm/chat`); suggestions never auto-overwrite sliders.
+- X.com helper: Best-effort text extractor at `/api/extract/x` used by the Add Evidence form.
 
 *Version 2.0.1 | Last Updated: September 2025*

@@ -94,7 +94,10 @@ If you want to create relationships directly in Neo4j:
 ### Create AFFECTS relationship:
 ```cypher
 MATCH (e:Evidence {id: 'E001'}), (h:Hypothesis {id: 'H001'})
-CREATE (e)-[:AFFECTS {strength: 0.8, direction: 'supports'}]->(h)
+CREATE (e)-[:AFFECTS {
+  p_e_given_h: 0.8,
+  p_e_given_not_h: 0.2
+}]->(h)
 RETURN e, h
 ```
 

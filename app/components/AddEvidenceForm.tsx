@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { evidenceApi, bayesianApi, type Evidence, type Hypothesis } from '@/lib/api-client';
 
 interface AddEvidenceFormProps {
@@ -28,6 +28,56 @@ export default function AddEvidenceForm({
     p_e_given_not_h: 50,
     performUpdate: true,
   });
+  const [fetchingX, setFetchingX] = useState(false);
+  const [xFetchError, setXFetchError] = useState<string>('');
+  const [xAutofilledFromUrl, setXAutofilledFromUrl] = useState<string>('');
+
+  // Gemini suggestion + chat state
+  const [geminiLoading, setGeminiLoading] = useState(false);
+  const [geminiError, setGeminiError] = useState<string>('');
+  const [suggestion, setSuggestion] = useState<{ p_e_given_h: number; p_e_given_not_h: number; rationale: string } | null>(null);
+  const [chatOpen, setChatOpen] = useState(false);
+  const [chatMessages, setChatMessages] = useState<Array<{ role: 'user' | 'assistant'; content: string }>>([]);
+  const [chatInput, setChatInput] = useState('');
+  const chatInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (chatOpen) {
+      // focus chat input when opening chat panel
+      setTimeout(() => chatInputRef.current?.focus(), 0);
+    }
+  }, [chatOpen]);
+
+  async function sendChatMessage() {
+    const msg = chatInput.trim();
+    if (!msg) return;
+    const selected = hypotheses.find(h => h.id === formData.hypothesisId);
+    if (!selected) return;
+    setChatMessages(prev => [...prev, { role: 'user', content: msg }]);
+    setChatInput('');
+    try {
+      const res = await fetch('/api/llm/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          hypothesis: { id: selected.id, statement: selected.statement, prior: selected.confidence },
+          evidence: { content: formData.content },
+          messages: [...chatMessages, { role: 'user', content: msg }],
+        }),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err?.error || `Chat failed (${res.status})`);
+      }
+      const data = await res.json();
+      const reply = String(data?.reply || '').trim();
+      setChatMessages(prev => [...prev, { role: 'assistant', content: reply || '(no response)' }]);
+    } catch (e: any) {
+      setChatMessages(prev => [...prev, { role: 'assistant', content: `Error: ${e?.message || 'failed to get reply'}` }]);
+    } finally {
+      chatInputRef.current?.focus();
+    }
+  }
 
   // Fetch suggested ID when form opens
   useEffect(() => {
@@ -44,6 +94,109 @@ export default function AddEvidenceForm({
       setIdError('');
     }
   }, [formData.id, suggestedId]);
+
+  // Auto-suggest likelihoods when a hypothesis is selected and content exists
+  useEffect(() => {
+    const selected = hypotheses.find(h => h.id === formData.hypothesisId);
+    if (!selected || !formData.content || formData.content.trim() === '') {
+      return;
+    }
+    const key = `${selected.id}|${formData.content.trim().slice(0, 100)}`;
+    if ((window as any).__bkms_lastSuggestKey === key) return;
+    (window as any).__bkms_lastSuggestKey = key;
+
+    (async () => {
+      setGeminiLoading(true);
+      setGeminiError('');
+      try {
+        const res = await fetch('/api/llm/suggest', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            hypothesis: { id: selected.id, statement: selected.statement, prior: selected.confidence },
+            evidence: { content: formData.content },
+          }),
+        });
+        if (!res.ok) {
+          const err = await res.json().catch(() => ({}));
+          throw new Error(err?.error || `Failed to get suggestions (${res.status})`);
+        }
+        const data = await res.json();
+        const s = {
+          p_e_given_h: Number(data.p_e_given_h ?? 0.5),
+          p_e_given_not_h: Number(data.p_e_given_not_h ?? 0.5),
+          rationale: String(data.rationale ?? ''),
+        };
+        setSuggestion(s);
+        setChatOpen(true);
+        setChatMessages([
+          {
+            role: 'assistant',
+            content: `Suggested P(E|H)=${(s.p_e_given_h * 100).toFixed(0)}%, P(E|~H)=${(s.p_e_given_not_h * 100).toFixed(0)}%\nReason: ${s.rationale}`,
+          },
+        ]);
+      } catch (e: any) {
+        setGeminiError(e?.message || 'Failed to get suggestions');
+      } finally {
+        setGeminiLoading(false);
+      }
+    })();
+  }, [formData.hypothesisId, formData.content, hypotheses]);
+
+  // Attempt to auto-fill evidence content when only an X/Twitter URL is provided
+  useEffect(() => {
+    const url = formData.source_url?.trim();
+    const contentEmpty = !formData.content || formData.content.trim() === '';
+
+    const isXUrl = (u: string) => {
+      try {
+        const parsed = new URL(u);
+        const host = parsed.hostname.toLowerCase();
+        return (host.endsWith('x.com') || host.endsWith('twitter.com')) && /\/status\//.test(parsed.pathname);
+      } catch {
+        return false;
+      }
+    };
+
+    if (!url || !contentEmpty || !isXUrl(url)) {
+      return;
+    }
+
+    if (xAutofilledFromUrl === url) return; // prevent repeat fetches for same URL
+
+    let cancelled = false;
+    setFetchingX(true);
+    setXFetchError('');
+
+    const t = setTimeout(async () => {
+      try {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 6000);
+        const res = await fetch(`/api/extract/x?url=${encodeURIComponent(url)}`, { signal: controller.signal });
+        clearTimeout(timeoutId);
+        if (!res.ok) {
+          const err = await res.json().catch(() => ({}));
+          throw new Error(err?.error || `Failed to fetch X.com content (${res.status})`);
+        }
+        const data = await res.json();
+        if (!cancelled && data?.text) {
+          setFormData(prev => ({ ...prev, content: data.text }));
+          setXAutofilledFromUrl(url);
+        }
+      } catch (e: any) {
+        if (!cancelled) {
+          setXFetchError(e?.message || 'Failed to extract text from X.com');
+        }
+      } finally {
+        if (!cancelled) setFetchingX(false);
+      }
+    }, 500); // small debounce while user types
+
+    return () => {
+      clearTimeout(t);
+      cancelled = true;
+    };
+  }, [formData.source_url, formData.content, xAutofilledFromUrl]);
 
   const fetchNextId = async () => {
     try {
@@ -98,6 +251,15 @@ export default function AddEvidenceForm({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    // Double-check if chat is open to avoid accidental submit while conversing
+    if (chatOpen) {
+      const proceed = window.confirm('You have an open AI chat. Submit this evidence now?');
+      if (!proceed) {
+        // Keep focus in chat
+        chatInputRef.current?.focus();
+        return;
+      }
+    }
     
     if (!formData.id || !formData.content || !formData.source_url) {
       alert('Please fill in all required fields');
@@ -180,7 +342,22 @@ export default function AddEvidenceForm({
   }
 
   return (
-    <form onSubmit={handleSubmit} className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6">
+    <form
+      onSubmit={handleSubmit}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter') {
+          const target = e.target as HTMLElement;
+          const isTextArea = target && target.tagName === 'TEXTAREA';
+          const isChat = chatInputRef.current && target === chatInputRef.current;
+          if (chatOpen && !isChat && !isTextArea) {
+            e.preventDefault();
+            e.stopPropagation();
+            chatInputRef.current?.focus();
+          }
+        }
+      }}
+      className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6"
+    >
       <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
         Add New Evidence
       </h3>
@@ -229,6 +406,12 @@ export default function AddEvidenceForm({
             className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-green-500 dark:bg-gray-700 dark:text-white"
             required
           />
+          {(geminiLoading || geminiError) && (
+            <p className="mt-1 text-xs">
+              {geminiLoading && <span className="text-blue-500">Getting AI suggestions…</span>}
+              {!geminiLoading && geminiError && <span className="text-yellow-600 dark:text-yellow-400">{geminiError}</span>}
+            </p>
+          )}
         </div>
 
         {/* Source URL */}
@@ -245,6 +428,19 @@ export default function AddEvidenceForm({
             className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-green-500 dark:bg-gray-700 dark:text-white"
             required
           />
+          {(fetchingX || xFetchError || xAutofilledFromUrl) && (
+            <div className="mt-1 text-xs">
+              {fetchingX && (
+                <span className="text-blue-500">Fetching text from X.com…</span>
+              )}
+              {!fetchingX && xFetchError && (
+                <span className="text-yellow-600 dark:text-yellow-400">{xFetchError}</span>
+              )}
+              {!fetchingX && !xFetchError && xAutofilledFromUrl && formData.content && (
+                <span className="text-green-600 dark:text-green-400">Auto-filled from X.com</span>
+              )}
+            </div>
+          )}
         </div>
 
         {/* Link to Hypothesis (Optional) */}
@@ -307,6 +503,89 @@ export default function AddEvidenceForm({
                 <div className="mt-2 text-xs text-gray-500 dark:text-gray-400">
                   Tip: 50% / 50% is neutral. The greater the gap between these two, the more diagnostic the evidence.
                 </div>
+              </div>
+
+              {/* AI Suggestions + Chat */}
+              <div className="mt-4 p-3 border rounded-md dark:border-gray-700">
+                <div className="flex items-center justify-between">
+                  <h5 className="text-sm font-medium text-gray-800 dark:text-gray-200">AI Suggested Likelihoods (Gemini)</h5>
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (!suggestion) return;
+                        setFormData(prev => ({
+                          ...prev,
+                          p_e_given_h: Math.round((suggestion.p_e_given_h || 0.5) * 100),
+                          p_e_given_not_h: Math.round((suggestion.p_e_given_not_h || 0.5) * 100),
+                        }));
+                      }}
+                      className="text-xs px-2 py-1 bg-green-600 text-white rounded hover:bg-green-700"
+                      disabled={!suggestion}
+                    >
+                      Apply
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setChatOpen(v => !v)}
+                      className="text-xs px-2 py-1 bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-gray-200 rounded"
+                    >
+                      {chatOpen ? 'Hide Chat' : 'Show Chat'}
+                    </button>
+                  </div>
+                </div>
+                <div className="mt-2 text-xs text-gray-700 dark:text-gray-300">
+                  {suggestion ? (
+                    <>
+                      <div>P(E|H): {(suggestion.p_e_given_h * 100).toFixed(0)}%  ·  P(E|~H): {(suggestion.p_e_given_not_h * 100).toFixed(0)}%</div>
+                      {suggestion.rationale && (
+                        <div className="mt-1 opacity-80">Reason: {suggestion.rationale}</div>
+                      )}
+                    </>
+                  ) : (
+                    <div className="opacity-80">Select a hypothesis and enter content to see suggestions.</div>
+                  )}
+                </div>
+
+                {chatOpen && (
+                  <div className="mt-3" data-chat-container>
+                    <div className="max-h-40 overflow-y-auto space-y-2 p-2 border rounded dark:border-gray-700 bg-white dark:bg-gray-800">
+                      {chatMessages.length === 0 && (
+                        <div className="text-xs text-gray-500">Start chatting with AI about this evidence and hypothesis.</div>
+                      )}
+                      {chatMessages.map((m, idx) => (
+                        <div key={idx} className="text-sm">
+                          <span className="font-semibold">{m.role === 'user' ? 'You' : 'AI'}:</span> <span className="whitespace-pre-wrap">{m.content}</span>
+                        </div>
+                      ))}
+                    </div>
+                    <div className="mt-2 flex gap-2">
+                      <input
+                        type="text"
+                        ref={chatInputRef}
+                        value={chatInput}
+                        onChange={(e) => setChatInput(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter' && !e.shiftKey) {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            sendChatMessage();
+                          }
+                        }}
+                        placeholder="Ask a question or request justification…"
+                        className="flex-1 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md dark:bg-gray-700 dark:text-white"
+                      />
+                      <button
+                        type="button"
+                        className="px-3 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50"
+                        disabled={!chatInput.trim()}
+                        onClick={() => { sendChatMessage(); }}
+                      >
+                        Send
+                      </button>
+                    </div>
+                  </div>
+                )}
               </div>
 
               {/* Auto-update checkbox */}

@@ -73,6 +73,19 @@ Let Noise = P(E|~H) × P(~H)
 P(H|E) = Signal / (Signal + Noise)
 ```
 
+### 4. Odds Form (for recompute)
+
+For multiple independent pieces of evidence, the odds form is order‑independent and convenient:
+
+```
+O(H)       = P(H) / (1−P(H))
+LR(E)      = P(E|H) / P(E|~H)
+O(H|E1..En)= O(H) × Π LR(Ei)
+P(H|E1..En)= O / (1 + O)
+```
+
+We use this to recompute a hypothesis’s confidence from an immutable base prior when evidence is removed or edited.
+
 ---
 
 ## Implementation in Code
@@ -126,6 +139,25 @@ const altLikelihood = relationship.p_e_given_not_h; // P(E|~H)
   await updateConfidence(hypothesisId, posterior);
   
   return { oldConfidence: prior, newConfidence: posterior };
+}
+```
+
+### 4. Recompute From Base on Evidence Delete
+
+```typescript
+function recomputeFromBase(
+  base: number,
+  links: Array<{ p_e_given_h: number; p_e_given_not_h: number }>
+): number {
+  const EPS = 1e-6;
+  const MAX_ODDS = 1e12;
+  const b = Math.min(1 - EPS, Math.max(EPS, base));
+  let odds = b / (1 - b);
+  for (const r of links) {
+    const lr = Math.max(EPS, r.p_e_given_h / Math.max(EPS, r.p_e_given_not_h));
+    odds = Math.min(MAX_ODDS, odds * lr);
+  }
+  return odds / (1 + odds);
 }
 ```
 
@@ -243,9 +275,9 @@ Result: Confidence increases slightly to 39.7%
 - **Use case**: Ongoing beliefs, predictions, theories
 
 ```typescript
-// Creates AFFECTS relationship
-Evidence --[AFFECTS {strength: 0.8, direction: 'supports'}]--> Hypothesis
-// Confidence: 60% → 85.7%
+// Creates AFFECTS relationship with explicit likelihoods
+Evidence --[AFFECTS { p_e_given_h: 0.8, p_e_given_not_h: 0.2 }]--> Hypothesis
+// Example effect: Prior 60% → Posterior ~85.7%
 ```
 
 #### 2. Verification (Definitive)
@@ -259,6 +291,12 @@ Evidence --[AFFECTS {strength: 0.8, direction: 'supports'}]--> Hypothesis
 Evidence --[VERIFIED_BY {type: 'confirmed'}]--> Hypothesis
 // Confidence: → 100% (locked)
 ```
+
+### Deletion/Reversal Behavior
+
+- We do not “rewind to the previous posterior.” Instead, we recompute current confidence from an immutable `base_confidence` using all remaining evidence via the odds/LR product.
+- This matches applying all remaining updates in any order under conditional independence.
+- Verified hypotheses remain locked and are not recomputed.
 
 ### Why Can't Bayesian Updates Reach 100%?
 
@@ -355,7 +393,7 @@ These aren't independent! The second provides minimal additional information.
 
 ### Q3: Can I undo an update?
 
-**A**: For Bayesian updates, you can delete the evidence link. For verification, it's permanent - this reflects reality where proven facts can't be "unproven."
+**A**: For Bayesian updates, delete the evidence (or its AFFECTS link) and the system recomputes from the base prior using all remaining evidence. For verification, it's permanent - this reflects reality where proven facts can't be "unproven."
 
 ### Q4: Why use Signal/Noise instead of standard notation?
 
@@ -384,7 +422,8 @@ The BKMS Bayesian system provides a **mathematically rigorous** yet **intuitive*
 1. **Evidence strength** = How diagnostic is this evidence?
 2. **Direction** = Does it support or contradict?
 3. **Bayesian update** = Rational confidence adjustment
-4. **Verification** = Final truth when available
+4. **Verification** = Final truth when available (locked)
+5. **Recompute on delete** = Undo impact by recalculating from base prior using remaining evidence
 
 This creates a complete epistemological system for rational belief management.
 

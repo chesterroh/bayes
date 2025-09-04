@@ -84,8 +84,8 @@ Open [http://localhost:3000](http://localhost:3000) with your browser to see the
 1. Click "Add Evidence"
 2. Enter evidence content
 3. Provide source URL
-4. Link to relevant hypotheses
-5. Specify impact (supports/contradicts) and strength
+4. Link to relevant hypotheses (optional)
+5. Specify likelihoods: P(E|H) and P(E|~H) (0–100%)
 
 ### Verifying Hypotheses
 
@@ -128,13 +128,16 @@ node scripts/check-prediction-accuracy.js
 
 ### Database Management
 ```bash
-# Initialize database with test data
-node scripts/init-db.js
+# Setup constraints (first time)
+node scripts/setup-constraints.js
+
+# Check database connectivity and stats
+node scripts/check-database.js
 
 # Clear all data
-node scripts/clear-db.js
+node scripts/clear-database.js
 
-# Check prediction accuracy
+# Check prediction accuracy report
 node scripts/check-prediction-accuracy.js
 ```
 

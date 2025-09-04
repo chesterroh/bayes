@@ -30,6 +30,7 @@ export interface HypothesisNode {
   id: string;
   statement: string;
   confidence: number;
+  base_confidence?: number | null;
   updated: string | null;
   verified: string | null;
   verification_type?: 'confirmed' | 'refuted' | null;

@@ -57,6 +57,63 @@ export class BayesianService {
       await session.close();
     }
   }
+
+  // Recompute hypothesis confidence from immutable base_confidence and current evidence links
+  static async recomputeFromBase(hypothesisId: string): Promise<{
+    base: number;
+    updatedConfidence: number;
+    evidenceCount: number;
+  } | null> {
+    const session = getSession();
+    const EPS = 1e-6;
+    const MAX_ODDS = 1e12;
+    try {
+      const result = await session.run(
+        `MATCH (h:Hypothesis {id: $hId})
+         OPTIONAL MATCH (e:Evidence)-[r:AFFECTS]->(h)
+         WHERE h.verified IS NULL
+         RETURN h as hyp, collect(r) as rels`,
+        { hId: hypothesisId }
+      );
+
+      if (result.records.length === 0) return null;
+      const rec = result.records[0];
+      const hyp = rec.get('hyp');
+      if (!hyp) return null;
+      const verified = hyp.properties.verified;
+      if (verified) {
+        // Do not recompute verified hypotheses
+        return null;
+      }
+
+      let base: number = hyp.properties.base_confidence;
+      if (typeof base !== 'number') {
+        // Fallback if not present yet
+        base = hyp.properties.confidence;
+      }
+      base = Math.min(1 - EPS, Math.max(EPS, base));
+      let odds = base / (1 - base);
+
+      const rels = rec.get('rels') as any[];
+      let count = 0;
+      for (const r of rels || []) {
+        if (!r) continue;
+        const peh = Number(r.properties.p_e_given_h);
+        const penh = Number(r.properties.p_e_given_not_h);
+        if (!Number.isFinite(peh) || !Number.isFinite(penh)) continue;
+        const denom = Math.max(EPS, penh);
+        const lr = Math.max(EPS, peh / denom);
+        odds = Math.min(MAX_ODDS, odds * lr);
+        count += 1;
+      }
+
+      const posterior = odds / (1 + odds);
+      await HypothesisService.updateConfidence(hypothesisId, posterior);
+      return { base, updatedConfidence: posterior, evidenceCount: count };
+    } finally {
+      await session.close();
+    }
+  }
   
   // Propagate belief updates through dependencies
   static async propagateUpdate(

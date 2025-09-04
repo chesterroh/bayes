@@ -33,6 +33,7 @@ Where:
 - Backend: Next.js API routes (TypeScript)
 - Scripts: Node.js or shell scripts only
 - Database: Neo4j with Node.js driver
+- LLM (optional): Gemini via Google Generative Language API
 
 ---
 
@@ -104,7 +105,7 @@ A graph-based belief tracking system that:
 │   - Evidence Processing                 │
 │   - Bayesian Calculations               │
 │   - Belief Propagation                  │
-│   - LLM Integration                     │
+│   - LLM Integration (optional)          │
 └─────────────────┬───────────────────────┘
                   │
 ┌─────────────────▼───────────────────────┐
@@ -126,6 +127,7 @@ A graph-based belief tracking system that:
   id: STRING,           // Unique identifier (e.g., 'H001')
   statement: STRING,    // The belief statement
   confidence: FLOAT,    // Current confidence (0.0 - 1.0)
+  base_confidence: FLOAT, // Immutable base prior used for recompute
   updated: DATETIME,    // Last update timestamp
   verified: DATETIME    // When hypothesis was verified (null if unverified)
 })
@@ -203,6 +205,26 @@ def bayesian_update(hypothesis, evidence, relationship):
     
     return posterior
 ```
+
+### 2.3.1 Recompute From Base Prior (Evidence Deletion)
+
+```typescript
+// Order‑independent recompute using likelihood ratios (assumes conditional independence)
+function recomputeFromBase(base: number, links: Array<{ p_e_given_h: number; p_e_given_not_h: number }>): number {
+  const EPS = 1e-6;
+  const MAX_ODDS = 1e12;
+  const b = Math.min(1 - EPS, Math.max(EPS, base));
+  let odds = b / (1 - b);
+  for (const r of links) {
+    const denom = Math.max(EPS, r.p_e_given_not_h);
+    const lr = Math.max(EPS, r.p_e_given_h / denom);
+    odds = Math.min(MAX_ODDS, odds * lr);
+  }
+  return odds / (1 + odds);
+}
+```
+
+On evidence delete (or link delete/edit), recompute the hypothesis confidence from `base_confidence` and the remaining AFFECTS links. Verified hypotheses are skipped (locked).
 
 ### 2.4 Hypothesis Verification Process
 
@@ -313,6 +335,7 @@ GET    /api/hypotheses          # List all hypotheses
 POST   /api/evidence            # Add new evidence
 GET    /api/evidence/{id}       # Get evidence details
 POST   /api/evidence/{id}/link  # Link evidence to hypothesis
+DELETE /api/evidence/{id}       # Delete evidence; recompute linked hypotheses from base prior
 
 # Bayesian Operations
 POST   /api/update              # Trigger Bayesian update
@@ -327,6 +350,11 @@ GET    /api/pending-verification # Get hypotheses awaiting verification
 GET    /api/graph/dependencies  # Get dependency graph
 GET    /api/graph/contradictions # Find contradicting hypotheses
 GET    /api/graph/path          # Find path between hypotheses
+
+# AI & Extraction
+GET    /api/extract/x           # Best-effort X/Twitter text extraction (no official API)
+POST   /api/llm/suggest         # Suggest P(E|H), P(E|~H) + rationale (Gemini)
+POST   /api/llm/chat            # Synchronous chat with Gemini using current hypothesis/evidence as context
 ```
 
 ### 3.3 Database Queries
@@ -431,7 +459,7 @@ RETURN h.statement as overdue_prediction, h.confidence
 - [x] Automated confidence updates via API
 
 ### Phase 3: Intelligence (Week 5-6)
-- [ ] Integrate LLM for evidence analysis
+- [x] Integrate LLM for evidence analysis (suggestions + chat)
 - [ ] Automatic evidence categorization
 - [ ] Evidence-to-hypothesis matching
 - [ ] Source credibility scoring
@@ -568,6 +596,40 @@ def propagate_with_dampening(graph, updated_node, dampening_factor=0.8):
             neighbor.confidence += (current.confidence_change * propagated_strength)
             queue.append((neighbor, propagated_strength))
 ```
+
+### 5.3 Reverse Update via Recompute
+
+We do not store every intermediate posterior. Instead, we keep an immutable `base_confidence` for each hypothesis and recompute from base using the remaining evidence whenever evidence is removed or edited.
+
+Key points:
+- Conditional independence → order‑independent likelihood ratio product.
+- Odds form improves numerical stability; clamp denominators and odds.
+- Verified hypotheses remain locked (no recompute).
+
+Pseudo (TypeScript):
+```typescript
+const EPS = 1e-6;
+const base = Math.min(1 - EPS, Math.max(EPS, h.base_confidence ?? h.confidence));
+let odds = base / (1 - base);
+for (const r of affects) {
+  const lr = Math.max(EPS, r.p_e_given_h / Math.max(EPS, r.p_e_given_not_h));
+  odds = Math.min(1e12, odds * lr);
+}
+const posterior = odds / (1 + odds);
+```
+
+### 5.4 X/Twitter Extraction
+
+Best‑effort only (no official X API):
+- Primary: `publish.twitter.com/oembed` with `omit_script=1` and no hiding
+- Fallback: `cdn.syndication.twitter.com/widgets/tweet?id=...` (undocumented)
+- Choose the longer of the two texts when both available; expect occasional truncation.
+
+### 5.5 Gemini Integration
+
+- Env vars: `GEMINI_API_KEY` (required), `GEMINI_MODEL` optional (default `gemini-2.5-pro`, fallback to `gemini-1.5-pro`).
+- Endpoints: `/api/llm/suggest` (returns `{ p_e_given_h, p_e_given_not_h, rationale }`), `/api/llm/chat` (returns `{ reply }`).
+- Frontend: After you select a hypothesis and enter evidence content, a one‑shot suggestion is requested. Sliders remain user‑controlled; Apply copies suggestions. Chat is synchronous; Enter in chat never submits the form.
 
 ---
 

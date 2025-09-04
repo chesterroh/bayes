@@ -23,6 +23,7 @@ export class HypothesisService {
           id: $id,
           statement: $statement,
           confidence: $confidence,
+          base_confidence: $confidence,
           updated: datetime(),
           verified: null
         })
@@ -37,6 +38,7 @@ export class HypothesisService {
         id: node.properties.id,
         statement: node.properties.statement,
         confidence: node.properties.confidence,
+        base_confidence: node.properties.base_confidence || null,
         updated: formatDateTime(node.properties.updated),
         verified: formatDateTime(node.properties.verified),
         verification_type: node.properties.verification_type || null,
@@ -67,6 +69,7 @@ export class HypothesisService {
         id: node.properties.id,
         statement: node.properties.statement,
         confidence: node.properties.confidence,
+        base_confidence: node.properties.base_confidence || null,
         updated: formatDateTime(node.properties.updated),
         verified: formatDateTime(node.properties.verified),
         verification_type: node.properties.verification_type || null,
@@ -92,6 +95,7 @@ export class HypothesisService {
           id: node.properties.id,
           statement: node.properties.statement,
           confidence: node.properties.confidence,
+          base_confidence: node.properties.base_confidence || null,
           updated: formatDateTime(node.properties.updated),
           verified: formatDateTime(node.properties.verified),
           verification_type: node.properties.verification_type || null,

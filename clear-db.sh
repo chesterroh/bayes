@@ -32,8 +32,8 @@ then
     echo "✅ Database cleanup complete!"
     echo ""
     echo "You can now:"
-    echo "  1. Run ./test-api.sh to test the API"
-    echo "  2. Start fresh with npm run dev"
+    echo "  1. Use curl tests from TEST_GUIDE.md"
+    echo "  2. Start the app with npm run dev"
     echo ""
 else
     echo ""

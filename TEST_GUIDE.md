@@ -7,15 +7,7 @@
 
 ## Quick Test
 
-### Option 1: Automated Test Script
-```bash
-# From project root
-./test-api.sh
-```
-
-This will automatically test all API endpoints.
-
-### Option 2: Manual Testing
+### Manual Testing
 
 #### 1. Start the server
 ```bash
@@ -68,8 +60,8 @@ curl -X POST http://localhost:3000/api/evidence/E001/link \
   -H "Content-Type: application/json" \
   -d '{
     "hypothesisId": "H001",
-    "strength": 0.8,
-    "direction": "supports"
+    "p_e_given_h": 0.8,
+    "p_e_given_not_h": 0.2
   }'
 ```
 
@@ -159,11 +151,9 @@ MATCH (n) DETACH DELETE n
 
 Given:
 - Prior confidence: 0.75
-- Evidence strength: 0.8 (supporting)
+- Likelihoods: P(E|H) = 0.8, P(E|~H) = 0.2
 
 Calculation:
-- Likelihood P(E|H) = 0.8
-- Alt-likelihood P(E|~H) = 0.2
 - Signal = 0.8 × 0.75 = 0.6
 - Noise = 0.2 × 0.25 = 0.05
 - Posterior = 0.6 / (0.6 + 0.05) = 0.923

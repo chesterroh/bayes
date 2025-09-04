@@ -14,6 +14,7 @@ out/
 *.d.ts
 !*.config.js
 !*.config.ts
+!app/scripts/*.js
 
 # TypeScript cache
 *.tsbuildinfo
