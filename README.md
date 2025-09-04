@@ -317,5 +317,6 @@ For detailed technical documentation and architecture, see [CLAUDE.md](CLAUDE.md
 - Consistent datetime serialization: API responses return ISO 8601 strings for `updated`, `verified`, and evidence `timestamp` fields.
 - Internal quality fixes only: Corrected Next.js route param typing and improved delete semantics; no feature changes.
 - Cypher examples use `null` (not `NULL`) for unverified fields to match Neo4j literal.
+- Evidence model updated: AFFECTS now uses explicit probabilities `P(E|H)` and `P(E|~H)` instead of `direction` + `strength`.
 
 *Version 2.0.1 | Last Updated: September 2025*

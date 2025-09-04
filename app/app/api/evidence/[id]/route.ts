@@ -4,10 +4,11 @@ import { EvidenceService } from '@/lib/db/evidence';
 // GET /api/evidence/[id]
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const evidence = await EvidenceService.get(params.id);
+    const { id } = await params;
+    const evidence = await EvidenceService.get(id);
     if (!evidence) {
       return NextResponse.json(
         { error: 'Evidence not found' },
@@ -27,9 +28,10 @@ export async function GET(
 // PUT /api/evidence/[id]
 export async function PUT(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { id } = await params;
     const body = await request.json();
     const { content, source_url } = body;
 
@@ -40,7 +42,7 @@ export async function PUT(
       );
     }
 
-    const updated = await EvidenceService.update(params.id, {
+    const updated = await EvidenceService.update(id, {
       content,
       source_url
     });
@@ -65,10 +67,11 @@ export async function PUT(
 // DELETE /api/evidence/[id]
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const success = await EvidenceService.delete(params.id);
+    const { id } = await params;
+    const success = await EvidenceService.delete(id);
     if (!success) {
       return NextResponse.json(
         { error: 'Evidence not found' },

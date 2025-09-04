@@ -737,6 +737,7 @@ Post-verification:
 - Ensure API returns ISO 8601 strings for datetime fields (`updated`, `verified`, evidence `timestamp`) consistently across endpoints
 - Corrected Next.js dynamic route parameter typing (internal refactor, no API change)
 - Updated app metadata (title/description) to BKMS
+- Evidence model update: Replaced `AFFECTS {strength, direction}` with explicit `AFFECTS {p_e_given_h, p_e_given_not_h}` and updated docs/examples accordingly
 
 ### Documentation Created
 - **BAYES_EXPLAIN.md**: Complete explanation of Bayesian logic and calculations
