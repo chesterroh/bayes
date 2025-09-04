@@ -120,6 +120,33 @@ export const evidenceApi = {
     });
     if (!res.ok) throw new Error('Failed to link evidence');
   },
+
+  async updateLink(
+    evidenceId: string,
+    hypothesisId: string,
+    relationship: AffectsRelationship
+  ): Promise<{ recomputed?: { id: string; updated: number | null } }> {
+    const res = await fetch(`${API_BASE}/evidence/${evidenceId}/link`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ hypothesisId, ...relationship }),
+    });
+    if (!res.ok) throw new Error('Failed to update link');
+    return res.json();
+  },
+
+  async deleteLink(
+    evidenceId: string,
+    hypothesisId: string
+  ): Promise<{ recomputed?: { id: string; updated: number | null } }> {
+    const res = await fetch(`${API_BASE}/evidence/${evidenceId}/link`, {
+      method: 'DELETE',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ hypothesisId }),
+    });
+    if (!res.ok) throw new Error('Failed to delete link');
+    return res.json();
+  },
 };
 
 // Bayesian Operations

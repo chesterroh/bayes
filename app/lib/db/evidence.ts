@@ -122,6 +122,59 @@ export class EvidenceService {
       await session.close();
     }
   }
+
+  // Check if link exists between an Evidence and Hypothesis
+  static async linkExists(evidenceId: string, hypothesisId: string): Promise<boolean> {
+    const session = getSession();
+    try {
+      const result = await session.run(
+        `MATCH (:Evidence {id: $eId})-[r:AFFECTS]->(:Hypothesis {id: $hId})
+         RETURN count(r) as cnt`,
+        { eId: evidenceId, hId: hypothesisId }
+      );
+      const cnt = result.records[0]?.get('cnt') ?? 0;
+      return Number(cnt) > 0;
+    } finally {
+      await session.close();
+    }
+  }
+
+  // Update existing AFFECTS likelihoods
+  static async updateLink(
+    evidenceId: string,
+    hypothesisId: string,
+    relationship: AffectsRelationship
+  ): Promise<boolean> {
+    const session = getSession();
+    try {
+      const result = await session.run(
+        `MATCH (:Evidence {id: $eId})-[r:AFFECTS]->(:Hypothesis {id: $hId})
+         SET r.p_e_given_h = $p_e_given_h,
+             r.p_e_given_not_h = $p_e_given_not_h
+         RETURN 1 as ok`,
+        { eId: evidenceId, hId: hypothesisId, ...relationship }
+      );
+      return result.records.length > 0;
+    } finally {
+      await session.close();
+    }
+  }
+
+  // Delete AFFECTS link between an Evidence and Hypothesis
+  static async deleteLink(evidenceId: string, hypothesisId: string): Promise<boolean> {
+    const session = getSession();
+    try {
+      const result = await session.run(
+        `MATCH (:Evidence {id: $eId})-[r:AFFECTS]->(:Hypothesis {id: $hId})
+         DELETE r
+         RETURN 1 as deleted`,
+        { eId: evidenceId, hId: hypothesisId }
+      );
+      return result.records.length > 0;
+    } finally {
+      await session.close();
+    }
+  }
   
   // Get evidence affecting a hypothesis
   static async getByHypothesis(hypothesisId: string): Promise<Array<{
