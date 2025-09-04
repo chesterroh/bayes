@@ -298,9 +298,13 @@ export default function AddEvidenceForm({
                       onChange={(e) => setFormData({ ...formData, direction: e.target.value as 'contradicts' })}
                       className="mr-2"
                     />
-                    <span className="text-red-600 dark:text-red-400">Contradicts</span>
+                  <span className="text-red-600 dark:text-red-400">Contradicts</span>
                   </label>
                 </div>
+                <p className="mt-2 text-xs text-gray-500 dark:text-gray-400">
+                  Tip: "Supports" means the evidence is more likely if the hypothesis is true;
+                  "Contradicts" means it’s more likely if the hypothesis is false.
+                </p>
               </div>
 
               {/* Strength Slider */}
@@ -317,6 +321,9 @@ export default function AddEvidenceForm({
                   onChange={(e) => setFormData({ ...formData, strength: parseInt(e.target.value) })}
                   className="w-full"
                 />
+                <div className="mt-2 text-xs text-gray-500 dark:text-gray-400">
+                  50% = neutral (no update). 60–70% = weak–moderate. 70–80% = strong. 90%+ = smoking gun.
+                </div>
               </div>
 
               {/* Auto-update checkbox */}

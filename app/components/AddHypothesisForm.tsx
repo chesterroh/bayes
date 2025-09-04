@@ -206,6 +206,9 @@ export default function AddHypothesisForm({ onHypothesisAdded }: AddHypothesisFo
             <span>75%</span>
             <span>100%</span>
           </div>
+          <p className="mt-2 text-xs text-gray-500 dark:text-gray-400">
+            Tip: This is your prior belief. 50% = genuinely unsure; evidence you add later will update this.
+          </p>
         </div>
 
         {/* Action Buttons */}
