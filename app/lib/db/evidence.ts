@@ -265,4 +265,47 @@ export class EvidenceService {
       await session.close();
     }
   }
+
+  // Get all hypotheses linked to this evidence with AFFECTS relationships
+  static async getLinkedHypotheses(evidenceId: string): Promise<Array<{
+    hypothesis: {
+      id: string;
+      statement: string;
+      confidence: number;
+    };
+    relationship: {
+      p_e_given_h: number;
+      p_e_given_not_h: number;
+    };
+  }>> {
+    const session = getSession();
+    
+    try {
+      const result = await session.run(
+        `MATCH (e:Evidence {id: $evidenceId})-[r:AFFECTS]->(h:Hypothesis)
+         RETURN h, r
+         ORDER BY h.id`,
+        { evidenceId }
+      );
+      
+      return result.records.map(record => {
+        const hypothesis = record.get('h');
+        const relationship = record.get('r');
+        
+        return {
+          hypothesis: {
+            id: hypothesis.properties.id,
+            statement: hypothesis.properties.statement,
+            confidence: hypothesis.properties.confidence
+          },
+          relationship: {
+            p_e_given_h: relationship.properties.p_e_given_h,
+            p_e_given_not_h: relationship.properties.p_e_given_not_h
+          }
+        };
+      });
+    } finally {
+      await session.close();
+    }
+  }
 }

@@ -119,12 +119,28 @@ export default function Dashboard() {
                 Track how your beliefs evolve with evidence
               </p>
             </div>
-            <button
-              onClick={loadData}
-              className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors"
-            >
-              Refresh
-            </button>
+            <div className="flex items-center gap-4">
+              <nav className="flex gap-2">
+                <a
+                  href="/hypotheses"
+                  className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 dark:bg-gray-700 dark:text-gray-300 dark:border-gray-600 dark:hover:bg-gray-600"
+                >
+                  All Hypotheses
+                </a>
+                <a
+                  href="/evidences"
+                  className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 dark:bg-gray-700 dark:text-gray-300 dark:border-gray-600 dark:hover:bg-gray-600"
+                >
+                  All Evidence
+                </a>
+              </nav>
+              <button
+                onClick={loadData}
+                className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors"
+              >
+                Refresh
+              </button>
+            </div>
           </div>
         </div>
       </header>

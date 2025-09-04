@@ -25,6 +25,7 @@ BKMS helps you:
 
 ### User Interface
 - **Modern Web UI**: Clean, responsive interface built with Next.js and React
+- **Permanent URLs**: Direct links to individual hypotheses (`/hypotheses/{id}`) and evidence (`/evidences/{id}`)
 - **Dark Mode Support**: Full dark mode compatibility
 - **Visual Feedback**: Color-coded confidence levels and verification status
 - **Inline Editing**: Edit hypotheses and evidence directly in the interface
@@ -33,8 +34,9 @@ BKMS helps you:
   - ⏳ Pending - Hypothesis under evaluation
   - ✓ Confirmed - Hypothesis proven true
   - ✗ Refuted - Hypothesis proven false
- - **AI Suggestions & Chat (optional)**: When a hypothesis is selected and evidence text is present, Gemini suggests P(E|H) and P(E|~H) with rationale, and you can chat to refine reasoning. Suggestions never overwrite your sliders unless you click Apply.
- - **X.com Auto-fill**: Paste an X/Twitter status URL into Source URL and the evidence text auto-fills (best-effort, no API keys).
+- **Likelihood Display**: Evidence pages show P(E|H) and P(E|¬H) for linked hypotheses with visual progress bars
+- **AI Suggestions & Chat (optional)**: When a hypothesis is selected and evidence text is present, Gemini suggests P(E|H) and P(E|~H) with rationale, and you can chat to refine reasoning. Suggestions never overwrite your sliders unless you click Apply.
+- **X.com Auto-fill**: Paste an X/Twitter status URL into Source URL and the evidence text auto-fills (best-effort, no API keys).
 
 ## 🛠️ Technology Stack
 
@@ -130,6 +132,13 @@ See TEST_GUIDE.md for curl-based API tests
 
 ## 🎮 Using the Application
 
+### Navigation & URLs
+- **Main Dashboard**: `http://localhost:3000` - Interactive workspace for creating and managing items
+- **All Hypotheses**: `http://localhost:3000/hypotheses` - Browse all hypotheses in grid view
+- **Individual Hypothesis**: `http://localhost:3000/hypotheses/{id}` - Permanent link to specific hypothesis
+- **All Evidence**: `http://localhost:3000/evidences` - Browse all evidence items
+- **Individual Evidence**: `http://localhost:3000/evidences/{id}` - Permanent link to specific evidence with likelihood display
+
 ### Creating a Hypothesis
 1. Click "Create New Hypothesis"
 2. ID is auto-generated (e.g., H001, H002)
@@ -155,11 +164,13 @@ See TEST_GUIDE.md for curl-based API tests
 - **Refute as False**: From the ⋮ menu → Click "Refute ✗" → Enter evidence ID that disproves it
 - **Delete**: From the ⋮ menu → Click "Delete" (requires confirmation)
 - **View Status**: Check the badge next to ID (⏳ Pending / ✓ Confirmed / ✗ Refuted)
+- **View Permanent Link**: Navigate to `/hypotheses/{id}` for shareable URL
 
 ### Managing Evidence
 - **Edit**: Click ✏️ to modify content or source
 - **Delete**: Click 🗑️ to remove (requires confirmation)
 - **Link**: Connect to hypotheses during creation
+- **View Linked Hypotheses**: Evidence pages display all linked hypotheses with their P(E|H) and P(E|¬H) values
 - **X.com Auto-fill**: If Source URL is an X/Twitter status link, the Content box auto-fills with tweet text (best-effort; no official X API).
 - **AI Suggestions**: After selecting a hypothesis and writing Content, an AI panel suggests P(E|H) and P(E|~H) with a rationale. Click Apply to copy suggestions to the sliders, or adjust manually. Use the built‑in chat to ask follow-up questions. Pressing Enter in chat sends a message (does not submit the form).
 
@@ -248,7 +259,17 @@ When you delete an evidence item (or remove a link to a hypothesis), the hypothe
 - `GET /api/evidence/[id]` - Get specific evidence
 - `PUT /api/evidence/[id]` - Update evidence
 - `DELETE /api/evidence/[id]` - Delete evidence and recompute linked hypotheses from base prior; returns `{ success, recomputed: [{ id, updated }] }`
-- `POST /api/evidence/[id]/link` - Link to hypothesis with P(E|H), P(E|~H)
+- `GET /api/evidence/[id]/links` - Get all hypotheses linked to this evidence with their P(E|H) and P(E|¬H) values
+- `POST /api/evidence/[id]/link` - Create AFFECTS link to hypothesis with P(E|H), P(E|~H)
+  - Create-only: returns 409 if link already exists
+  - Blocks if hypothesis is verified (locked)
+- `PUT /api/evidence/[id]/link` - Edit AFFECTS link likelihoods
+  - Validates [0..1]
+  - Blocks if hypothesis is verified
+  - Recomputes the hypothesis from base prior and returns `{ recomputed: { id, updated } }`
+- `DELETE /api/evidence/[id]/link` - Remove AFFECTS link for `{ hypothesisId }`
+  - Blocks if hypothesis is verified
+  - Recomputes the hypothesis from base prior and returns `{ recomputed: { id, updated } }`
 
 ### Bayesian Operations
 - `POST /api/update` - Perform Bayesian update
@@ -262,6 +283,17 @@ When you delete an evidence item (or remove a link to a hypothesis), the hypothe
 - `GET /api/extract/x?url=<x_status_url>` - Best-effort text extraction for X/Twitter links (oEmbed + syndication fallback)
 - `POST /api/llm/suggest` - Given hypothesis (id, statement, prior) and evidence text, returns `{ p_e_given_h, p_e_given_not_h, rationale }` using Gemini
 - `POST /api/llm/chat` - Synchronous chat with Gemini using current hypothesis/evidence as context; returns `{ reply }`
+
+## 🔁 AFFECTS Link Management
+
+- Create (POST): Create-only. If an AFFECTS link already exists for (evidence, hypothesis), the server returns 409. Verified hypotheses are locked and reject modifications.
+- Edit (PUT): Update `p_e_given_h` and `p_e_given_not_h`. The server recomputes the hypothesis from its immutable `base_confidence` using all current links and returns the updated value.
+- Unlink (DELETE): Remove the AFFECTS relationship. The server recomputes from base and returns the updated value.
+- Delete Evidence (DELETE /api/evidence/[id]): Removes the node and all links, recomputes each previously linked hypothesis from base.
+- Base prior backfill: For legacy data without `base_confidence`, the server infers it from the current posterior and existing links before any mutation, then persists it.
+
+UI behavior:
+- After evidence deletion, the client refreshes the affected hypotheses using the recompute results returned by the API so you see updated confidences immediately.
 
 ## 📊 Neo4j Queries
 
@@ -342,6 +374,13 @@ For detailed technical documentation and architecture, see [CLAUDE.md](CLAUDE.md
 - Evidence model updated: AFFECTS now uses explicit probabilities `P(E|H)` and `P(E|~H)` instead of `direction` + `strength`.
 - Evidence delete semantics: Deleting evidence triggers recomputation of linked hypotheses from `base_confidence` using LR products. Verified hypotheses are locked.
 - Hypothesis base prior: New hypotheses store `base_confidence` at creation. Existing nodes recompute with `confidence` as fallback base if missing.
+
+### Latest Updates (December 2025)
+- **Permanent URLs**: Added dedicated pages for hypotheses (`/hypotheses`, `/hypotheses/{id}`) and evidence (`/evidences`, `/evidences/{id}`)
+- **Likelihood Display**: Evidence detail pages now display P(E|H) and P(E|¬H) values for all linked hypotheses with visual progress bars
+- **Navigation Links**: Added quick navigation between dashboard and permanent pages
+- **Link Indicators**: Evidence list shows count of linked hypotheses
+- **API Enhancement**: New `/api/evidence/[id]/links` endpoint to retrieve hypothesis links with likelihood values
 ### AI Suggestions/Chat Issues
 - Ensure `GEMINI_API_KEY` is present in `app/.env.local` or environment
 - If `gemini-2.5-pro` is unavailable, the server falls back to `gemini-1.5-pro`

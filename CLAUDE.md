@@ -334,7 +334,10 @@ GET    /api/hypotheses          # List all hypotheses
 # Evidence Management
 POST   /api/evidence            # Add new evidence
 GET    /api/evidence/{id}       # Get evidence details
+GET    /api/evidence/{id}/links # Get linked hypotheses with P(E|H) and P(E|~H)
 POST   /api/evidence/{id}/link  # Link evidence to hypothesis
+PUT    /api/evidence/{id}/link  # Edit AFFECTS likelihoods
+DELETE /api/evidence/{id}/link  # Unlink evidence from hypothesis
 DELETE /api/evidence/{id}       # Delete evidence; recompute linked hypotheses from base prior
 
 # Bayesian Operations
@@ -633,6 +636,70 @@ Best‑effort only (no official X API):
 
 ---
 
+## 6. Developer Notes
+
+### 6.1 Where Things Live (Entry Points)
+
+- Evidence delete (snapshot + backfill + recompute):
+  - `app/app/api/evidence/[id]/route.ts` → `DELETE`
+- AFFECTS link lifecycle (backfill before mutate, recompute on edit/unlink):
+  - `app/app/api/evidence/[id]/link/route.ts` → `POST` (create-only), `PUT` (edit), `DELETE` (unlink)
+- Recompute engine (odds × LR product):
+  - `app/lib/db/bayesian.ts` → `BayesianService.recomputeFromBase`
+- Base prior persistence:
+  - `app/lib/db/hypothesis.ts` → `HypothesisService.setBaseConfidence`
+- Link helpers (existence/update/delete):
+  - `app/lib/db/evidence.ts` → `linkExists`, `updateLink`, `deleteLink`
+
+### 6.2 Mutation Flows
+
+- Evidence DELETE `/api/evidence/[id]`:
+  1) Snapshot all linked hypotheses: collect current `h.confidence` and all current `AFFECTS` (peh, penh) before deletion.
+  2) If any affected hypothesis has no `base_confidence`, infer it: `postOdds = P/(1−P)`, `LR_prod = Π(peh/max(EPS, penh))`, `baseOdds = postOdds / max(EPS, LR_prod)`, `base = baseOdds/(1+baseOdds)`. Persist base once.
+  3) Delete evidence (`DETACH DELETE`) — removes its AFFECTS.
+  4) Recompute each affected hypothesis from base via `recomputeFromBase`.
+  5) Return `{ success, recomputed: [{ id, updated }] }`.
+
+- Link POST `/api/evidence/[id]/link` (create-only):
+  - Verified guard (reject if `h.verified`), duplicate guard (`linkExists` → 409).
+  - Backfill base if missing from current posterior and all current links (as above).
+  - Create AFFECTS, no auto-recompute (keeps create semantics consistent).
+
+- Link PUT `/api/evidence/[id]/link` (edit):
+  - Verified guard; validate [0..1]; backfill base if missing; update AFFECTS properties; recompute from base; return updated.
+
+- Link DELETE `/api/evidence/[id]/link` (unlink):
+  - Verified guard; backfill base if missing; delete AFFECTS; recompute from base; return updated.
+
+### 6.3 Algorithm, Constants, Invariants
+
+- Recompute odds form (order‑independent under conditional independence):
+  - `b = clamp(base, EPS, 1−EPS)`; `odds = b/(1−b)`; for each link: `lr = max(EPS, peh/max(EPS, penh))`; `odds = min(MAX_ODDS, odds × lr)`; `posterior = odds/(1+odds)`.
+- Constants: `EPS = 1e-6`, `MAX_ODDS = 1e12`.
+- Verified lock: If `h.verified` is set, skip recompute and block link mutations.
+- Base prior immutability: Never mutate `base_confidence` after it is set; only backfill when null.
+
+### 6.4 UI Sync Hooks
+
+- After evidence DELETE, the API returns affected hypothesis IDs; the client fetches fresh hypotheses and merges them into local state so the confidence bar updates immediately.
+- Link PUT/DELETE also returns `{ recomputed: { id, updated } }` for immediate UI refresh if/when edit/unlink UI is added.
+
+### 6.5 Testing Checklist
+
+- Single link remove: add one evidence/link → delete evidence → posterior returns to base.
+- Multiple links: add two links → delete one → posterior matches recompute with remaining link.
+- Legacy base: create hypotheses without `base_confidence` → add evidence → delete → ensure backfill computes correct base and recompute works.
+- Verified: set verified → ensure POST/PUT/DELETE link all return 409 and recompute is skipped.
+- Edge: `p_e_given_not_h ≈ 0` clamps, no NaN/Inf; duplicates cause 409 on POST.
+
+### 6.6 Extending Safely
+
+- If adding new link types that affect confidence, reuse the backfill‑before‑mutate and recompute‑after pattern.
+- Consider a lightweight event log only if you need true time‑travel (state “just before evidence X”), which is distinct from recompute.
+- Add GET endpoints for listing links if richer editing UI is needed.
+
+---
+
 ## 6. Future Enhancements
 
 ### 6.1 Advanced Features
@@ -801,6 +868,20 @@ Post-verification:
 - Updated app metadata (title/description) to BKMS
 - Evidence model update: Replaced `AFFECTS {strength, direction}` with explicit `AFFECTS {p_e_given_h, p_e_given_not_h}` and updated docs/examples accordingly
 
+### Session 3: Permanent URLs & Likelihood Display (December 2025)
+1. **Permanent URL System**: Created dedicated pages for browsing and viewing individual items
+   - `/hypotheses` - Grid view of all hypotheses
+   - `/hypotheses/{id}` - Individual hypothesis detail page
+   - `/evidences` - Grid view of all evidence
+   - `/evidences/{id}` - Individual evidence detail page with likelihood display
+2. **Likelihood Display**: Evidence pages now show P(E|H) and P(E|¬H) for linked hypotheses
+   - Visual progress bars for both likelihood values
+   - Links to related hypothesis pages
+   - Count indicators on evidence list
+3. **API Enhancement**: Added `/api/evidence/[id]/links` endpoint to fetch linked hypotheses with AFFECTS relationship values
+4. **Navigation Improvements**: Added navigation links between dashboard and permanent pages
+5. **UI Polish**: Breadcrumb navigation, copy-to-clipboard for permanent links
+
 ### Documentation Created
 - **BAYES_EXPLAIN.md**: Complete explanation of Bayesian logic and calculations
 - **NEO4J_QUERIES.md**: Guide for viewing and debugging relationships in Neo4j Browser
@@ -843,6 +924,8 @@ Post-verification:
 - ✅ Visual status indicators (Pending/Confirmed/Refuted)
 - ✅ Dark mode support
 - ✅ Responsive design with Tailwind CSS
+- ✅ Permanent URL pages for hypotheses and evidence
+- ✅ Likelihood display on evidence pages showing P(E|H) and P(E|¬H)
 
 #### Infrastructure & Tools
 - ✅ Next.js 14 application with TypeScript
@@ -915,3 +998,28 @@ Post-verification:
 - [ ] Audit logging and versioning
 - [ ] Advanced permissions system
 - [ ] Cloud deployment options
+### 3.4 AFFECTS Link Management Semantics
+
+- Create (`POST /api/evidence/{id}/link`):
+  - Create-only; returns 409 if link already exists for the (Evidence, Hypothesis) pair.
+  - Blocks if hypothesis is verified (locked).
+  - Does not auto-recompute (keeps create flow consistent; UI may opt-in to update).
+
+- Edit (`PUT /api/evidence/{id}/link`):
+  - Validates `p_e_given_h`, `p_e_given_not_h` in [0..1].
+  - Blocks if hypothesis is verified.
+  - Recomputes the hypothesis from `base_confidence` using odds × LR product and returns `{ recomputed: { id, updated } }`.
+
+- Unlink (`DELETE /api/evidence/{id}/link`):
+  - Removes the AFFECTS relationship.
+  - Blocks if hypothesis is verified.
+  - Recomputes from base and returns `{ recomputed: { id, updated } }`.
+
+- Evidence Delete (`DELETE /api/evidence/{id}`):
+  - Snapshots each linked hypothesis’s current posterior and link set, infers `base_confidence` if missing, deletes the evidence, then recomputes each affected hypothesis from base using remaining links.
+  - Returns `{ success, recomputed: [{ id, updated }] }`.
+
+- Base prior backfill (legacy nodes):
+  - If `base_confidence` is missing, infer it from current posterior P and existing links E via:
+    - `postOdds = P/(1−P)`; `LR_prod = Π (P(E|H)/P(E|~H))`; `baseOdds = postOdds / LR_prod`; `base = baseOdds/(1+baseOdds)`.
+  - Persist the inferred base once; future recomputes use the stored base.
