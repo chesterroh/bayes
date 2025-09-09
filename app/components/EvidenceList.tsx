@@ -19,6 +19,10 @@ export default function EvidenceList({
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editContent, setEditContent] = useState('');
   const [editSourceUrl, setEditSourceUrl] = useState('');
+  const navigateTo = (id: string) => {
+    if (editingId) return; // don't navigate while editing
+    window.location.href = `/evidences/${id}`;
+  };
 
   if (evidence.length === 0) {
     return (
@@ -82,7 +86,11 @@ export default function EvidenceList({
         {evidence.map((item) => (
           <div
             key={item.id}
-            className="bg-white dark:bg-gray-800 rounded-lg shadow p-4 hover:shadow-md transition-shadow"
+            role="button"
+            tabIndex={0}
+            onClick={() => navigateTo(item.id)}
+            onKeyDown={(e) => { if (e.key === 'Enter') navigateTo(item.id); }}
+            className={`bg-white dark:bg-gray-800 rounded-lg shadow p-4 hover:shadow-md transition-shadow ${editingId === item.id ? '' : 'cursor-pointer'}`}
           >
             {editingId === item.id ? (
               // Edit mode
@@ -93,13 +101,13 @@ export default function EvidenceList({
                   </span>
                   <div className="space-x-2">
                     <button
-                      onClick={() => handleSaveEdit(item.id)}
+                      onClick={(e) => { e.stopPropagation(); handleSaveEdit(item.id); }}
                       className="px-3 py-1 text-sm bg-green-600 text-white rounded hover:bg-green-700"
                     >
                       Save
                     </button>
                     <button
-                      onClick={handleCancelEdit}
+                      onClick={(e) => { e.stopPropagation(); handleCancelEdit(); }}
                       className="px-3 py-1 text-sm bg-gray-600 text-white rounded hover:bg-gray-700"
                     >
                       Cancel
@@ -132,14 +140,14 @@ export default function EvidenceList({
                       {formatDate(item.timestamp)}
                     </span>
                     <button
-                      onClick={() => handleEdit(item)}
+                      onClick={(e) => { e.stopPropagation(); handleEdit(item); }}
                       className="text-blue-600 hover:text-blue-700 dark:text-blue-400"
                       title="Edit"
                     >
                       ✏️
                     </button>
                     <button
-                      onClick={() => handleDelete(item.id)}
+                      onClick={(e) => { e.stopPropagation(); handleDelete(item.id); }}
                       className="text-red-600 hover:text-red-700 dark:text-red-400"
                       title="Delete"
                     >
@@ -155,6 +163,7 @@ export default function EvidenceList({
                     href={item.source_url}
                     target="_blank"
                     rel="noopener noreferrer"
+                    onClick={(e) => e.stopPropagation()}
                     className="text-sm text-blue-600 dark:text-blue-400 hover:underline"
                   >
                     🔗 {item.source_url}

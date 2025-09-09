@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { Hypothesis, Evidence, hypothesisApi, bayesianApi } from '@/lib/api-client';
 
 interface HypothesisCardProps {
@@ -16,6 +17,7 @@ export default function HypothesisCard({
   onUpdate,
   onDelete,
 }: HypothesisCardProps) {
+  const router = useRouter();
   const [isUpdating, setIsUpdating] = useState(false);
   const [showActions, setShowActions] = useState(false);
 
@@ -73,14 +75,20 @@ export default function HypothesisCard({
   };
 
   return (
-    <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6 hover:shadow-lg transition-shadow">
+    <div
+      role="button"
+      tabIndex={0}
+      onClick={() => router.push(`/hypotheses/${hypothesis.id}`)}
+      onKeyDown={(e) => { if (e.key === 'Enter') router.push(`/hypotheses/${hypothesis.id}`); }}
+      className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6 hover:shadow-lg transition-shadow cursor-pointer"
+    >
       {/* Header */}
       <div className="flex justify-between items-start mb-4">
         <h3 className="text-lg font-semibold text-gray-900 dark:text-white flex-1">
           {hypothesis.statement}
         </h3>
         <button
-          onClick={() => setShowActions(!showActions)}
+          onClick={(e) => { e.stopPropagation(); setShowActions(!showActions); }}
           className="ml-2 p-1 text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-gray-200 text-xl font-bold"
           title="Show actions menu"
         >
@@ -163,6 +171,7 @@ export default function HypothesisCard({
           {!isVerified && (
             <>
               <button
+                onClick={(e) => { e.stopPropagation(); }}
                 onClick={() => {
                   const newConfidence = prompt('Enter new confidence (0-100):', String(confidencePercent));
                   if (newConfidence) {
@@ -182,14 +191,14 @@ export default function HypothesisCard({
               </button>
               <div className="grid grid-cols-2 gap-2">
                 <button
-                  onClick={() => handleVerify('confirmed')}
+                  onClick={(e) => { e.stopPropagation(); handleVerify('confirmed'); }}
                   disabled={isUpdating}
                   className="px-3 py-2 text-sm bg-green-50 dark:bg-green-900/20 text-green-600 dark:text-green-400 rounded hover:bg-green-100 dark:hover:bg-green-900/30"
                 >
                   Verify ✓
                 </button>
                 <button
-                  onClick={() => handleVerify('refuted')}
+                  onClick={(e) => { e.stopPropagation(); handleVerify('refuted'); }}
                   disabled={isUpdating}
                   className="px-3 py-2 text-sm bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 rounded hover:bg-red-100 dark:hover:bg-red-900/30"
                 >
@@ -199,7 +208,7 @@ export default function HypothesisCard({
             </>
           )}
           <button
-            onClick={handleDelete}
+            onClick={(e) => { e.stopPropagation(); handleDelete(); }}
             disabled={isUpdating}
             className="w-full px-3 py-2 text-sm bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 rounded hover:bg-red-100 dark:hover:bg-red-900/30"
           >
