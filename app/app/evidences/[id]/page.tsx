@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { Evidence } from '@/lib/types';
+import { evidenceApi } from '@/lib/api-client';
 
 interface LinkedHypothesis {
   hypothesis: {
@@ -26,6 +27,8 @@ export default function EvidencePage() {
   const [linkedHypotheses, setLinkedHypotheses] = useState<LinkedHypothesis[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [editing, setEditing] = useState<Record<string, { p_e_given_h: number; p_e_given_not_h: number }>>({});
+  const [saving, setSaving] = useState<Record<string, boolean>>({});
 
   useEffect(() => {
     if (id) {
@@ -62,6 +65,40 @@ export default function EvidencePage() {
       console.error('Error fetching linked hypotheses:', err);
     }
   };
+
+  async function saveLikelihoods(hypothesisId: string) {
+    const vals = editing[hypothesisId];
+    if (!vals || !evidence) return;
+    try {
+      setSaving(prev => ({ ...prev, [hypothesisId]: true }));
+      await evidenceApi.updateLink(evidence.id, hypothesisId, {
+        p_e_given_h: vals.p_e_given_h / 100,
+        p_e_given_not_h: vals.p_e_given_not_h / 100,
+      });
+      await fetchLinkedHypotheses();
+      setEditing(prev => ({ ...prev, [hypothesisId]: undefined as any }));
+    } catch (e) {
+      console.error('Failed to update link:', e);
+      alert('Failed to update likelihoods');
+    } finally {
+      setSaving(prev => ({ ...prev, [hypothesisId]: false }));
+    }
+  }
+
+  async function unlinkHypothesis(hypothesisId: string) {
+    if (!evidence) return;
+    if (!confirm('Remove link between this evidence and the hypothesis?')) return;
+    try {
+      setSaving(prev => ({ ...prev, [hypothesisId]: true }));
+      await evidenceApi.deleteLink(evidence.id, hypothesisId);
+      await fetchLinkedHypotheses();
+    } catch (e) {
+      console.error('Failed to unlink:', e);
+      alert('Failed to unlink');
+    } finally {
+      setSaving(prev => ({ ...prev, [hypothesisId]: false }));
+    }
+  }
 
   if (loading) {
     return (
@@ -249,73 +286,130 @@ export default function EvidencePage() {
               </div>
             ) : (
               <div className="space-y-4">
-                {linkedHypotheses.map((link) => (
-                  <div key={link.hypothesis.id} className="bg-gray-50 dark:bg-gray-900 rounded-lg p-4 border border-gray-200 dark:border-gray-700">
-                    <div className="flex items-start justify-between mb-3">
-                      <div className="flex-1">
-                        <Link
-                          href={`/hypotheses/${link.hypothesis.id}`}
-                          className="text-sm font-mono text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300"
-                        >
-                          {link.hypothesis.id}
-                        </Link>
-                        <p className="mt-1 text-sm text-gray-700 dark:text-gray-300">
-                          {link.hypothesis.statement}
-                        </p>
-                        <div className="mt-2 flex items-center gap-2">
-                          <span className="text-xs text-gray-500 dark:text-gray-400">
-                            Current confidence:
-                          </span>
-                          <span className="text-xs font-medium text-gray-900 dark:text-white">
-                            {(link.hypothesis.confidence * 100).toFixed(1)}%
-                          </span>
+                {linkedHypotheses.map((link) => {
+                  const h = link.hypothesis;
+                  const rel = link.relationship;
+                  const edit = editing[h.id];
+                  const isSaving = !!saving[h.id];
+                  return (
+                    <div key={h.id} className="bg-gray-50 dark:bg-gray-900 rounded-lg p-4 border border-gray-200 dark:border-gray-700">
+                      <div className="flex items-start justify-between mb-3">
+                        <div className="flex-1">
+                          <Link
+                            href={`/hypotheses/${h.id}`}
+                            className="text-sm font-mono text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300"
+                          >
+                            {h.id}
+                          </Link>
+                          <p className="mt-1 text-sm text-gray-700 dark:text-gray-300">
+                            {h.statement}
+                          </p>
+                          <div className="mt-2 flex items-center gap-2">
+                            <span className="text-xs text-gray-500 dark:text-gray-400">Current confidence:</span>
+                            <span className="text-xs font-medium text-gray-900 dark:text-white">
+                              {(h.confidence * 100).toFixed(1)}%
+                            </span>
+                          </div>
+                        </div>
+                        <div className="ml-3 flex gap-2">
+                          {edit ? (
+                            <button
+                              disabled={isSaving}
+                              onClick={() => saveLikelihoods(h.id)}
+                              className="px-3 py-1 text-xs bg-green-600 text-white rounded hover:bg-green-700 disabled:opacity-50"
+                            >
+                              Save
+                            </button>
+                          ) : (
+                            <button
+                              disabled={isSaving}
+                              onClick={() =>
+                                setEditing(prev => ({
+                                  ...prev,
+                                  [h.id]: {
+                                    p_e_given_h: Math.round(rel.p_e_given_h * 100),
+                                    p_e_given_not_h: Math.round(rel.p_e_given_not_h * 100),
+                                  },
+                                }))
+                              }
+                              className="px-3 py-1 text-xs bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50"
+                            >
+                              Edit Likelihoods
+                            </button>
+                          )}
+                          <button
+                            disabled={isSaving}
+                            onClick={() => unlinkHypothesis(h.id)}
+                            className="px-3 py-1 text-xs bg-red-600 text-white rounded hover:bg-red-700 disabled:opacity-50"
+                          >
+                            Unlink
+                          </button>
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-3 border-t border-gray-200 dark:border-gray-700">
+                        <div>
+                          <div className="flex items-center justify-between mb-1">
+                            <span className="text-xs text-gray-600 dark:text-gray-400">P(E|H)</span>
+                            <span className="text-sm font-medium text-gray-900 dark:text-white">
+                              {((edit?.p_e_given_h ?? rel.p_e_given_h * 100)).toFixed(1)}%
+                            </span>
+                          </div>
+                          <div className="w-full bg-gray-200 rounded-full h-1.5 dark:bg-gray-700">
+                            <div
+                              className="bg-blue-500 h-1.5 rounded-full"
+                              style={{ width: `${(edit ? edit.p_e_given_h : rel.p_e_given_h * 100)}%` }}
+                            />
+                          </div>
+                          {edit && (
+                            <input
+                              type="range"
+                              min={0}
+                              max={100}
+                              value={edit.p_e_given_h}
+                              onChange={(e) =>
+                                setEditing(prev => ({
+                                  ...prev,
+                                  [h.id]: { ...prev[h.id], p_e_given_h: parseInt(e.target.value) },
+                                }))
+                              }
+                              className="w-full mt-1"
+                            />
+                          )}
+                        </div>
+                        <div>
+                          <div className="flex items-center justify-between mb-1">
+                            <span className="text-xs text-gray-600 dark:text-gray-400">P(E|¬H)</span>
+                            <span className="text-sm font-medium text-gray-900 dark:text-white">
+                              {((edit?.p_e_given_not_h ?? rel.p_e_given_not_h * 100)).toFixed(1)}%
+                            </span>
+                          </div>
+                          <div className="w-full bg-gray-200 rounded-full h-1.5 dark:bg-gray-700">
+                            <div
+                              className="bg-orange-500 h-1.5 rounded-full"
+                              style={{ width: `${(edit ? edit.p_e_given_not_h : rel.p_e_given_not_h * 100)}%` }}
+                            />
+                          </div>
+                          {edit && (
+                            <input
+                              type="range"
+                              min={0}
+                              max={100}
+                              value={edit.p_e_given_not_h}
+                              onChange={(e) =>
+                                setEditing(prev => ({
+                                  ...prev,
+                                  [h.id]: { ...prev[h.id], p_e_given_not_h: parseInt(e.target.value) },
+                                }))
+                              }
+                              className="w-full mt-1"
+                            />
+                          )}
                         </div>
                       </div>
                     </div>
-                    
-                    <div className="grid grid-cols-2 gap-4 pt-3 border-t border-gray-200 dark:border-gray-700">
-                      <div>
-                        <div className="flex items-center justify-between mb-1">
-                          <span className="text-xs text-gray-600 dark:text-gray-400">
-                            P(E|H)
-                          </span>
-                          <span className="text-sm font-medium text-gray-900 dark:text-white">
-                            {(link.relationship.p_e_given_h * 100).toFixed(1)}%
-                          </span>
-                        </div>
-                        <div className="w-full bg-gray-200 rounded-full h-1.5 dark:bg-gray-700">
-                          <div 
-                            className="bg-blue-500 h-1.5 rounded-full"
-                            style={{ width: `${link.relationship.p_e_given_h * 100}%` }}
-                          />
-                        </div>
-                        <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
-                          Likelihood if hypothesis is true
-                        </p>
-                      </div>
-                      
-                      <div>
-                        <div className="flex items-center justify-between mb-1">
-                          <span className="text-xs text-gray-600 dark:text-gray-400">
-                            P(E|¬H)
-                          </span>
-                          <span className="text-sm font-medium text-gray-900 dark:text-white">
-                            {(link.relationship.p_e_given_not_h * 100).toFixed(1)}%
-                          </span>
-                        </div>
-                        <div className="w-full bg-gray-200 rounded-full h-1.5 dark:bg-gray-700">
-                          <div 
-                            className="bg-orange-500 h-1.5 rounded-full"
-                            style={{ width: `${link.relationship.p_e_given_not_h * 100}%` }}
-                          />
-                        </div>
-                        <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
-                          Likelihood if hypothesis is false
-                        </p>
-                      </div>
-                    </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             )}
           </div>

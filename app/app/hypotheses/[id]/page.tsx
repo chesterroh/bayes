@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { Hypothesis, Evidence } from '@/lib/types';
+import { evidenceApi, hypothesisApi } from '@/lib/api-client';
 
 export default function HypothesisPage() {
   const params = useParams();
@@ -11,9 +12,15 @@ export default function HypothesisPage() {
   const id = params.id as string;
   
   const [hypothesis, setHypothesis] = useState<Hypothesis | null>(null);
-  const [linkedEvidence, setLinkedEvidence] = useState<Evidence[]>([]);
+  type LinkedEvidence = {
+    evidence: Evidence;
+    relationship: { p_e_given_h: number; p_e_given_not_h: number };
+  };
+  const [linkedEvidence, setLinkedEvidence] = useState<LinkedEvidence[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [editing, setEditing] = useState<Record<string, { p_e_given_h: number; p_e_given_not_h: number }>>({});
+  const [saving, setSaving] = useState<Record<string, boolean>>({});
 
   useEffect(() => {
     if (id) {
@@ -42,16 +49,15 @@ export default function HypothesisPage() {
 
   const fetchLinkedEvidence = async () => {
     try {
-      const response = await fetch('/api/evidence');
-      if (!response.ok) throw new Error('Failed to fetch evidence');
-      const allEvidence = await response.json();
-      
-      // Filter evidence that affects this hypothesis
-      // Note: This is a simplified approach. In production, you'd want an API endpoint
-      // that returns only linked evidence for a specific hypothesis
-      setLinkedEvidence(allEvidence);
+      const response = await fetch(`/api/hypotheses/${id}/links`);
+      if (!response.ok) {
+        if (response.status === 404) throw new Error('Hypothesis not found');
+        throw new Error('Failed to fetch linked evidence');
+      }
+      const data = (await response.json()) as LinkedEvidence[];
+      setLinkedEvidence(data);
     } catch (err) {
-      console.error('Error fetching evidence:', err);
+      console.error('Error fetching linked evidence:', err);
     }
   };
 
@@ -71,6 +77,47 @@ export default function HypothesisPage() {
     if (confidence >= 0.4) return 'bg-orange-500';
     return 'bg-red-500';
   };
+
+  const isLocked = !!hypothesis?.verified;
+
+  async function saveLikelihoods(evId: string) {
+    const vals = editing[evId];
+    if (!vals || !hypothesis) return;
+    try {
+      setSaving(prev => ({ ...prev, [evId]: true }));
+      await evidenceApi.updateLink(evId, hypothesis.id, {
+        p_e_given_h: vals.p_e_given_h / 100,
+        p_e_given_not_h: vals.p_e_given_not_h / 100,
+      });
+      // Refresh hypothesis and links to reflect recompute
+      const fresh = await hypothesisApi.getById(hypothesis.id);
+      setHypothesis(fresh);
+      await fetchLinkedEvidence();
+      setEditing(prev => ({ ...prev, [evId]: undefined as any }));
+    } catch (e) {
+      console.error('Failed to update link:', e);
+      alert('Failed to update likelihoods');
+    } finally {
+      setSaving(prev => ({ ...prev, [evId]: false }));
+    }
+  }
+
+  async function unlinkEvidence(evId: string) {
+    if (!hypothesis) return;
+    if (!confirm('Remove link between this evidence and the hypothesis?')) return;
+    try {
+      setSaving(prev => ({ ...prev, [evId]: true }));
+      await evidenceApi.deleteLink(evId, hypothesis.id);
+      const fresh = await hypothesisApi.getById(hypothesis.id);
+      setHypothesis(fresh);
+      await fetchLinkedEvidence();
+    } catch (e) {
+      console.error('Failed to unlink evidence:', e);
+      alert('Failed to unlink');
+    } finally {
+      setSaving(prev => ({ ...prev, [evId]: false }));
+    }
+  }
 
   if (loading) {
     return (
@@ -252,11 +299,137 @@ export default function HypothesisPage() {
           {/* Related Evidence Section */}
           <div className="mt-8">
             <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
-              Related Evidence
+              Linked Evidence
             </h2>
-            <div className="text-sm text-gray-600 dark:text-gray-400">
-              <p>View and manage evidence links from the <Link href="/" className="text-blue-600 hover:text-blue-700 dark:text-blue-400">main dashboard</Link>.</p>
-            </div>
+            {linkedEvidence.length === 0 ? (
+              <div className="text-sm text-gray-600 dark:text-gray-400">
+                No evidence linked to this hypothesis.
+              </div>
+            ) : (
+              <div className="space-y-4">
+                {linkedEvidence.map((link) => {
+                  const ev = link.evidence;
+                  const rel = link.relationship;
+                  const edit = editing[ev.id];
+                  const isSaving = !!saving[ev.id];
+                  return (
+                    <div key={ev.id} className="bg-gray-50 dark:bg-gray-900 rounded-lg p-4 border border-gray-200 dark:border-gray-700">
+                      <div className="flex items-start justify-between">
+                        <div className="flex-1">
+                          <Link
+                            href={`/evidences/${ev.id}`}
+                            className="text-sm font-mono text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300"
+                          >
+                            {ev.id}
+                          </Link>
+                          <p className="mt-1 text-sm text-gray-700 dark:text-gray-300 line-clamp-3">
+                            {ev.content}
+                          </p>
+                        </div>
+                        <div className="ml-3 flex gap-2">
+                          {!isLocked && (
+                            <>
+                              {edit ? (
+                                <button
+                                  disabled={isSaving}
+                                  onClick={() => saveLikelihoods(ev.id)}
+                                  className="px-3 py-1 text-xs bg-green-600 text-white rounded hover:bg-green-700 disabled:opacity-50"
+                                >
+                                  Save
+                                </button>
+                              ) : (
+                                <button
+                                  disabled={isSaving}
+                                  onClick={() =>
+                                    setEditing((prev) => ({
+                                      ...prev,
+                                      [ev.id]: {
+                                        p_e_given_h: Math.round(rel.p_e_given_h * 100),
+                                        p_e_given_not_h: Math.round(rel.p_e_given_not_h * 100),
+                                      },
+                                    }))
+                                  }
+                                  className="px-3 py-1 text-xs bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50"
+                                >
+                                  Edit Likelihoods
+                                </button>
+                              )}
+                              <button
+                                disabled={isSaving}
+                                onClick={() => unlinkEvidence(ev.id)}
+                                className="px-3 py-1 text-xs bg-red-600 text-white rounded hover:bg-red-700 disabled:opacity-50"
+                              >
+                                Unlink
+                              </button>
+                            </>
+                          )}
+                        </div>
+                      </div>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-3">
+                        <div>
+                          <div className="flex items-center justify-between mb-1">
+                            <span className="text-xs text-gray-600 dark:text-gray-400">P(E|H)</span>
+                            <span className="text-sm font-medium text-gray-900 dark:text-white">
+                              {((edit?.p_e_given_h ?? rel.p_e_given_h * 100)).toFixed(1)}%
+                            </span>
+                          </div>
+                          <div className="w-full bg-gray-200 rounded-full h-1.5 dark:bg-gray-700">
+                            <div
+                              className="bg-blue-500 h-1.5 rounded-full"
+                              style={{ width: `${(edit ? edit.p_e_given_h : rel.p_e_given_h * 100)}%` }}
+                            />
+                          </div>
+                          {edit && !isLocked && (
+                            <input
+                              type="range"
+                              min={0}
+                              max={100}
+                              value={edit.p_e_given_h}
+                              onChange={(e) =>
+                                setEditing((prev) => ({
+                                  ...prev,
+                                  [ev.id]: { ...prev[ev.id], p_e_given_h: parseInt(e.target.value) },
+                                }))
+                              }
+                              className="w-full mt-1"
+                            />
+                          )}
+                        </div>
+                        <div>
+                          <div className="flex items-center justify-between mb-1">
+                            <span className="text-xs text-gray-600 dark:text-gray-400">P(E|¬H)</span>
+                            <span className="text-sm font-medium text-gray-900 dark:text-white">
+                              {((edit?.p_e_given_not_h ?? rel.p_e_given_not_h * 100)).toFixed(1)}%
+                            </span>
+                          </div>
+                          <div className="w-full bg-gray-200 rounded-full h-1.5 dark:bg-gray-700">
+                            <div
+                              className="bg-orange-500 h-1.5 rounded-full"
+                              style={{ width: `${(edit ? edit.p_e_given_not_h : rel.p_e_given_not_h * 100)}%` }}
+                            />
+                          </div>
+                          {edit && !isLocked && (
+                            <input
+                              type="range"
+                              min={0}
+                              max={100}
+                              value={edit.p_e_given_not_h}
+                              onChange={(e) =>
+                                setEditing((prev) => ({
+                                  ...prev,
+                                  [ev.id]: { ...prev[ev.id], p_e_given_not_h: parseInt(e.target.value) },
+                                }))
+                              }
+                              className="w-full mt-1"
+                            />
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
           </div>
         </div>
       </div>

@@ -109,6 +109,29 @@ curl -X POST http://localhost:3000/api/verify \
 
 Expected: H002 confidence becomes 1.0 and verified timestamp is set
 
+#### 8. List Linked Evidence For a Hypothesis
+```bash
+curl http://localhost:3000/api/hypotheses/H001/links
+```
+
+#### 9. Edit Link Likelihoods
+```bash
+curl -X PUT http://localhost:3000/api/evidence/E001/link \
+  -H "Content-Type: application/json" \
+  -d '{
+    "hypothesisId": "H001",
+    "p_e_given_h": 0.7,
+    "p_e_given_not_h": 0.3
+  }'
+```
+
+#### 10. Unlink Evidence From Hypothesis
+```bash
+curl -X DELETE http://localhost:3000/api/evidence/E001/link \
+  -H "Content-Type: application/json" \
+  -d '{ "hypothesisId": "H001" }'
+```
+
 ## Viewing in Neo4j Browser
 
 1. Open Neo4j Desktop
