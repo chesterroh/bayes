@@ -26,6 +26,7 @@ BKMS helps you:
 ### User Interface
 - **Modern Web UI**: Clean, responsive interface built with Next.js and React
 - **Permanent URLs**: Direct links to individual hypotheses (`/hypotheses/{id}`) and evidence (`/evidences/{id}`)
+- **Clickable Cards**: Dashboard hypothesis and evidence cards navigate to their permanent pages
 - **Dark Mode Support**: Full dark mode compatibility
 - **Visual Feedback**: Color-coded confidence levels and verification status
 - **Inline Editing**: Edit hypotheses and evidence directly in the interface
@@ -35,6 +36,7 @@ BKMS helps you:
   - ✓ Confirmed - Hypothesis proven true
   - ✗ Refuted - Hypothesis proven false
 - **Likelihood Display**: Evidence pages show P(E|H) and P(E|¬H) for linked hypotheses with visual progress bars
+- **Link Management**: Edit or unlink Evidence↔Hypothesis relationships from both hypothesis and evidence detail pages
 - **AI Suggestions & Chat (optional)**: When a hypothesis is selected and evidence text is present, Gemini suggests P(E|H) and P(E|~H) with rationale, and you can chat to refine reasoning. Suggestions never overwrite your sliders unless you click Apply.
 - **X.com Auto-fill**: Paste an X/Twitter status URL into Source URL and the evidence text auto-fills (best-effort, no API keys).
 
@@ -138,6 +140,7 @@ See TEST_GUIDE.md for curl-based API tests
 - **Individual Hypothesis**: `http://localhost:3000/hypotheses/{id}` - Permanent link to specific hypothesis
 - **All Evidence**: `http://localhost:3000/evidences` - Browse all evidence items
 - **Individual Evidence**: `http://localhost:3000/evidences/{id}` - Permanent link to specific evidence with likelihood display
+Tip: On the dashboard, click any hypothesis or evidence card to jump to its permanent page.
 
 ### Creating a Hypothesis
 1. Click "Create New Hypothesis"
@@ -165,6 +168,7 @@ See TEST_GUIDE.md for curl-based API tests
 - **Delete**: From the ⋮ menu → Click "Delete" (requires confirmation)
 - **View Status**: Check the badge next to ID (⏳ Pending / ✓ Confirmed / ✗ Refuted)
 - **View Permanent Link**: Navigate to `/hypotheses/{id}` for shareable URL
+- **Linked Evidence**: On the hypothesis page, view all linked evidence with likelihood bars; edit P(E|H)/P(E|¬H) or unlink as needed (verified hypotheses are locked)
 
 ### Managing Evidence
 - **Edit**: Click ✏️ to modify content or source
@@ -173,6 +177,7 @@ See TEST_GUIDE.md for curl-based API tests
 - **View Linked Hypotheses**: Evidence pages display all linked hypotheses with their P(E|H) and P(E|¬H) values
 - **X.com Auto-fill**: If Source URL is an X/Twitter status link, the Content box auto-fills with tweet text (best-effort; no official X API).
 - **AI Suggestions**: After selecting a hypothesis and writing Content, an AI panel suggests P(E|H) and P(E|~H) with a rationale. Click Apply to copy suggestions to the sliders, or adjust manually. Use the built‑in chat to ask follow-up questions. Pressing Enter in chat sends a message (does not submit the form).
+- **Linked Hypotheses**: On the evidence page, view all linked hypotheses with likelihood bars; edit likelihoods or unlink directly
 
 ## 🗄️ Database Schema
 
@@ -381,6 +386,10 @@ For detailed technical documentation and architecture, see [CLAUDE.md](CLAUDE.md
 - **Navigation Links**: Added quick navigation between dashboard and permanent pages
 - **Link Indicators**: Evidence list shows count of linked hypotheses
 - **API Enhancement**: New `/api/evidence/[id]/links` endpoint to retrieve hypothesis links with likelihood values
+### UI Enhancements (September 2025)
+- **Clickable Cards**: Dashboard cards now navigate to permanent pages
+- **Link Management UI**: Hypothesis and Evidence pages support editing and unlinking Evidence↔Hypothesis relationships in place
+- **API Enhancement**: New `/api/hypotheses/[id]/links` endpoint to retrieve evidence links for a hypothesis
 ### AI Suggestions/Chat Issues
 - Ensure `GEMINI_API_KEY` is present in `app/.env.local` or environment
 - If `gemini-2.5-pro` is unavailable, the server falls back to `gemini-1.5-pro`
@@ -389,6 +398,8 @@ For detailed technical documentation and architecture, see [CLAUDE.md](CLAUDE.md
 ### X/Twitter Extraction Limitations
 - Without the official X API, extraction relies on public oEmbed and an undocumented syndication endpoint
 - Some long posts or threads may still be truncated; we take the longer of the two sources when possible
+### Link Discovery
+- `GET /api/hypotheses/[id]/links` - Get all evidence linked to this hypothesis with their likelihood values
 - AI support: Optional Gemini-powered suggestions (`/api/llm/suggest`) and chat (`/api/llm/chat`); suggestions never auto-overwrite sliders.
 - X.com helper: Best-effort text extractor at `/api/extract/x` used by the Add Evidence form.
 

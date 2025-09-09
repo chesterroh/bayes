@@ -358,6 +358,9 @@ GET    /api/graph/path          # Find path between hypotheses
 GET    /api/extract/x           # Best-effort X/Twitter text extraction (no official API)
 POST   /api/llm/suggest         # Suggest P(E|H), P(E|~H) + rationale (Gemini)
 POST   /api/llm/chat            # Synchronous chat with Gemini using current hypothesis/evidence as context
+
+# Link Discovery
+GET    /api/hypotheses/{id}/links # Get linked evidence with P(E|H) and P(E|~H)
 ```
 
 ### 3.3 Database Queries
@@ -682,7 +685,8 @@ Best‑effort only (no official X API):
 ### 6.4 UI Sync Hooks
 
 - After evidence DELETE, the API returns affected hypothesis IDs; the client fetches fresh hypotheses and merges them into local state so the confidence bar updates immediately.
-- Link PUT/DELETE also returns `{ recomputed: { id, updated } }` for immediate UI refresh if/when edit/unlink UI is added.
+- Link PUT/DELETE return `{ recomputed: { id, updated } }`; hypothesis and evidence detail pages refresh links and hypothesis data after edits/unlinks.
+- Dashboard cards are clickable and navigate to permanent item pages; action buttons prevent navigation via event propagation guards.
 
 ### 6.5 Testing Checklist
 
@@ -1023,3 +1027,11 @@ Post-verification:
   - If `base_confidence` is missing, infer it from current posterior P and existing links E via:
     - `postOdds = P/(1−P)`; `LR_prod = Π (P(E|H)/P(E|~H))`; `baseOdds = postOdds / LR_prod`; `base = baseOdds/(1+baseOdds)`.
   - Persist the inferred base once; future recomputes use the stored base.
+
+#### Discovery Endpoints
+- `GET /api/evidence/{id}/links`: returns all hypotheses linked to the given evidence with their likelihoods.
+- `GET /api/hypotheses/{id}/links`: returns all evidence linked to the given hypothesis with their likelihoods.
+
+#### UI Controls
+- Hypothesis detail page: lists all linked evidence with P(E|H) and P(E|¬H); supports inline edit/unlink; verified hypotheses are locked.
+- Evidence detail page: lists all linked hypotheses with P(E|H) and P(E|¬H); supports inline edit/unlink.
