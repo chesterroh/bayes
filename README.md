@@ -376,6 +376,43 @@ MIT License - See LICENSE file for details
 
 For detailed technical documentation and architecture, see [CLAUDE.md](CLAUDE.md)
 
+## 🧪 Research (PyMC) — Isolated Module
+
+An experimental PyMC workflow has been added in `research/pymc/`. This is fully separate from the Next.js app and does not change the "No Python in app" policy. Use it only for offline research and modeling.
+
+What's inside
+- `requirements.txt` — PyMC/ArviZ/NumPy/pandas deps
+- `simulate.py` — create a toy dataset
+- `train.py` — fit a hierarchical logistic model with a global time random walk; saves `posterior.nc` and `encodings.json`
+- `predict.py` — load the saved posterior and score new rows
+- `bkms_pymc/` — small helper library (I/O, standardization, model build)
+
+Quickstart
+```bash
+cd research/pymc
+python -m venv .venv && source .venv/bin/activate
+pip install -r requirements.txt
+
+# 1) Simulate data
+python simulate.py --out data/observations.csv --n-hypotheses 20 --n-time 40 --features 3
+
+# 2) Train
+python train.py --data data/observations.csv --features feat_1 feat_2 feat_3 --out outputs
+
+# 3) Predict
+python predict.py \
+  --model outputs/posterior.nc \
+  --encodings outputs/encodings.json \
+  --data data/observations.csv \
+  --features feat_1 feat_2 feat_3 \
+  --out outputs/predictions.csv
+```
+
+Notes
+- The app remains TypeScript-only; Python exists only under `research/pymc/`.
+- Predictions require `hypothesis_id` and `time_index` seen during training. Retrain to expand coordinates.
+- See `research/pymc/README.md` for details.
+
 ## 🔧 Maintenance Notes (September 2025)
 
 - Consistent datetime serialization: API responses return ISO 8601 strings for `updated`, `verified`, and evidence `timestamp` fields.

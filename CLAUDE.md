@@ -28,6 +28,23 @@ Where:
 - All backend code runs on Node.js
 - Database interactions use the neo4j-driver npm package
 
+### 🧪 Research Module Exception (PyMC)
+- A separate, optional research workspace exists at `research/pymc/` for PyMC experiments.
+- This directory is isolated from the app; it does not run in production and does not alter the TypeScript codebase.
+- The "No Python" policy remains in force for the app and all `app/` code. Python is allowed only under `research/pymc/` for offline modeling.
+- Included: `simulate.py`, `train.py`, `predict.py`, and a small helper library `bkms_pymc/`.
+- Quickstart:
+  ```bash
+  cd research/pymc
+  python -m venv .venv && source .venv/bin/activate
+  pip install -r requirements.txt
+  python simulate.py --out data/observations.csv --n-hypotheses 20 --n-time 40 --features 3
+  python train.py --data data/observations.csv --features feat_1 feat_2 feat_3 --out outputs
+  python predict.py --model outputs/posterior.nc --encodings outputs/encodings.json \
+    --data data/observations.csv --features feat_1 feat_2 feat_3 --out outputs/predictions.csv
+  ```
+  Notes: predictions require hypothesis/time indices known at train time; retrain to expand.
+
 ### Technology Consistency
 - Frontend: Next.js with TypeScript
 - Backend: Next.js API routes (TypeScript)
