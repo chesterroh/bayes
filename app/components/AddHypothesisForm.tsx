@@ -19,6 +19,28 @@ export default function AddHypothesisForm({ onHypothesisAdded }: AddHypothesisFo
     confidence: 50,
   });
 
+  // AI Review state (manual trigger)
+  const [reviewLoading, setReviewLoading] = useState(false);
+  const [reviewError, setReviewError] = useState('');
+  const [review, setReview] = useState<null | {
+    valid_bayesian: boolean;
+    atomicity_score: number;
+    issues: string[];
+    falsifiable: boolean;
+    measurable: boolean;
+    time_bound: boolean;
+    suggested_rewrite: string;
+    operationalization?: {
+      measurable_event?: string;
+      threshold?: string;
+      timeframe?: string;
+      scope?: string;
+    };
+    evidence_ideas?: string[];
+    suggested_tags?: string[];
+    note?: string;
+  }>(null);
+
   // Fetch suggested ID when form opens
   useEffect(() => {
     if (isOpen) {
@@ -111,6 +133,9 @@ export default function AddHypothesisForm({ onHypothesisAdded }: AddHypothesisFo
       
       // Reset form
       setFormData({ id: '', statement: '', confidence: 50 });
+      setReview(null);
+      setReviewError('');
+      setReviewLoading(false);
       setSuggestedId('');
       setIdError('');
       setIsOpen(false);
@@ -183,6 +208,130 @@ export default function AddHypothesisForm({ onHypothesisAdded }: AddHypothesisFo
             className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white"
             required
           />
+          {/* AI Review Trigger */}
+          <div className="mt-2 flex items-center gap-3">
+            <button
+              type="button"
+              onClick={async () => {
+                setReviewError('');
+                setReview(null);
+                if (!formData.statement.trim()) {
+                  setReviewError('Enter a statement first.');
+                  return;
+                }
+                try {
+                  setReviewLoading(true);
+                  const res = await fetch('/api/llm/hypothesis/review', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ statement: formData.statement.trim() }),
+                  });
+                  const data = await res.json().catch(() => ({}));
+                  if (!res.ok) {
+                    throw new Error(data?.error || `Review failed (${res.status})`);
+                  }
+                  setReview(data);
+                } catch (e: any) {
+                  setReviewError(e?.message || 'Failed to get AI review');
+                } finally {
+                  setReviewLoading(false);
+                }
+              }}
+              className="px-3 py-1.5 bg-purple-600 text-white rounded-md text-sm hover:bg-purple-700 disabled:opacity-50"
+              disabled={reviewLoading}
+            >
+              {reviewLoading ? 'Reviewing…' : 'Get AI Review'}
+            </button>
+            {reviewError && <span className="text-xs text-yellow-700 dark:text-yellow-400">{reviewError}</span>}
+          </div>
+          {/* AI Review Panel */}
+          {review && (
+            <div className="mt-3 border rounded-md p-3 bg-gray-50 dark:bg-gray-800 border-gray-200 dark:border-gray-700">
+              <div className="flex flex-wrap items-center gap-2 text-sm">
+                <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${review.valid_bayesian ? 'bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-300' : 'bg-red-100 text-red-800 dark:bg-red-900/40 dark:text-red-300'}`}>
+                  {review.valid_bayesian ? 'Valid Bayesian' : 'Needs Refinement'}
+                </span>
+                <span className="text-gray-600 dark:text-gray-300">Atomicity: {(review.atomicity_score * 100).toFixed(0)}%</span>
+                <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${review.falsifiable ? 'bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-300' : 'bg-gray-200 text-gray-800 dark:bg-gray-700 dark:text-gray-200'}`}>Falsifiable</span>
+                <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${review.measurable ? 'bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-300' : 'bg-gray-200 text-gray-800 dark:bg-gray-700 dark:text-gray-200'}`}>Measurable</span>
+                <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${review.time_bound ? 'bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-300' : 'bg-gray-200 text-gray-800 dark:bg-gray-700 dark:text-gray-200'}`}>Time‑bound</span>
+              </div>
+              {review.issues && review.issues.length > 0 && (
+                <div className="mt-2 text-xs text-gray-700 dark:text-gray-300">
+                  Issues: {review.issues.map((i, idx) => (
+                    <span key={idx} className="inline-block mr-1 mb-1 px-2 py-0.5 rounded bg-yellow-100 text-yellow-800 dark:bg-yellow-900/40 dark:text-yellow-300">
+                      {i}
+                    </span>
+                  ))}
+                </div>
+              )}
+              {/* Suggested rewrite */}
+              {review.suggested_rewrite && (
+                <div className="mt-3">
+                  <div className="text-xs font-medium text-gray-600 dark:text-gray-300 mb-1">Suggested rewrite</div>
+                  <div className="flex items-start gap-2">
+                    <textarea
+                      readOnly
+                      value={review.suggested_rewrite}
+                      className="flex-1 text-sm px-2 py-2 border rounded dark:border-gray-700 dark:bg-gray-900 dark:text-gray-100"
+                      rows={2}
+                    />
+                    <div className="flex flex-col gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setFormData(prev => ({ ...prev, statement: review.suggested_rewrite }))}
+                        className="px-2 py-1 text-xs bg-blue-600 text-white rounded hover:bg-blue-700"
+                      >
+                        Replace Statement
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          navigator.clipboard.writeText(review.suggested_rewrite).catch(() => {});
+                        }}
+                        className="px-2 py-1 text-xs bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-gray-200 rounded"
+                      >
+                        Copy
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
+              {/* Operationalization */}
+              {review.operationalization && (
+                <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
+                  {review.operationalization.measurable_event && (
+                    <div><span className="font-medium">Event:</span> {review.operationalization.measurable_event}</div>
+                  )}
+                  {review.operationalization.threshold && (
+                    <div><span className="font-medium">Threshold:</span> {review.operationalization.threshold}</div>
+                  )}
+                  {review.operationalization.timeframe && (
+                    <div><span className="font-medium">Timeframe:</span> {review.operationalization.timeframe}</div>
+                  )}
+                  {review.operationalization.scope && (
+                    <div><span className="font-medium">Scope:</span> {review.operationalization.scope}</div>
+                  )}
+                </div>
+              )}
+              {/* Evidence ideas */}
+              {review.evidence_ideas && review.evidence_ideas.length > 0 && (
+                <div className="mt-3">
+                  <div className="text-xs font-medium text-gray-600 dark:text-gray-300 mb-1">Evidence ideas</div>
+                  <ul className="list-disc list-inside text-xs text-gray-700 dark:text-gray-300">
+                    {review.evidence_ideas.map((idea, idx) => (
+                      <li key={idx}>{idea}</li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+              {review.note && (
+                <div className="mt-3 text-xs text-gray-600 dark:text-gray-300 opacity-90">
+                  {review.note}
+                </div>
+              )}
+            </div>
+          )}
         </div>
 
         {/* Confidence Slider */}

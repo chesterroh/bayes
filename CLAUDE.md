@@ -358,6 +358,10 @@ GET    /api/graph/path          # Find path between hypotheses
 GET    /api/extract/x           # Best-effort X/Twitter text extraction (no official API)
 POST   /api/llm/suggest         # Suggest P(E|H), P(E|~H) + rationale (Gemini)
 POST   /api/llm/chat            # Synchronous chat with Gemini using current hypothesis/evidence as context
+POST   /api/llm/hypothesis/review # Evaluate a hypothesis for Bayesian suitability (server-only LLM)
+
+## Analytics
+GET    /api/analytics/accuracy  # Brier mean, simple calibration bins, verified items
 
 # Link Discovery
 GET    /api/hypotheses/{id}/links # Get linked evidence with P(E|H) and P(E|~H)
@@ -633,9 +637,59 @@ Best‑effort only (no official X API):
 
 ### 5.5 Gemini Integration
 
-- Env vars: `GEMINI_API_KEY` (required), `GEMINI_MODEL` optional (default `gemini-2.5-pro`, fallback to `gemini-1.5-pro`).
+- Env vars: `GEMINI_API_KEY` (required), `GEMINI_MODEL` optional (default `gemini-2.5-pro`). No fallback to other models.
 - Endpoints: `/api/llm/suggest` (returns `{ p_e_given_h, p_e_given_not_h, rationale }`), `/api/llm/chat` (returns `{ reply }`).
 - Frontend: After you select a hypothesis and enter evidence content, a one‑shot suggestion is requested. Sliders remain user‑controlled; Apply copies suggestions. Chat is synchronous; Enter in chat never submits the form.
+
+### 5.6 Hypothesis Review (AI)
+
+Endpoint
+- `POST /api/llm/hypothesis/review` → evaluates a proposed hypothesis for Bayesian suitability.
+
+Request
+```json
+{ "statement": "AI will transform software development by 2027" }
+```
+
+Response (server clamps lengths and values)
+```ts
+type ReviewResponse = {
+  valid_bayesian: boolean;
+  atomicity_score: number; // 0..1
+  issues: (
+    'compound' | 'vague_terms' | 'unbounded_timeframe' | 'non_falsifiable' |
+    'ambiguous_subject' | 'overly_broad_scope' | 'unclear_metric' | 'tautology'
+  )[];
+  falsifiable: boolean;
+  measurable: boolean;
+  time_bound: boolean;
+  suggested_rewrite: string; // <= 160 chars
+  operationalization?: {
+    measurable_event?: string; // <= 120
+    threshold?: string;        // <= 80
+    timeframe?: string;        // <= 80
+    scope?: string;            // <= 80
+  };
+  evidence_ideas?: string[];   // up to 6, each <= 80
+  suggested_tags?: string[];   // up to 6, each <= 30
+  note?: string;               // <= ~1000 chars
+  model?: string;              // resolved model name
+};
+```
+
+Implementation details
+- File: `app/app/api/llm/hypothesis/review/route.ts`
+- Prompt: instructs the model to assess atomicity, falsifiability, measurability, and time‑boundedness and to return strict JSON only.
+- Parsing: strips code fences; JSON.parse; on parse failure, returns a soft fallback JSON instead of 500.
+- Validation: clamps numeric fields to [0..1], whitelists `issues`, truncates long strings.
+- Timeout: 20s per request via `AbortController`.
+- Model selection: uses `process.env.GEMINI_MODEL || 'gemini-2.5-pro'`. No fallbacks to other models.
+- Errors: non‑OK responses return `{ error, status, detail }` with 502.
+
+UI integration
+- Manual trigger button “Get AI Review” in `AddHypothesisForm`.
+- Renders status chips, issue tags, suggested rewrite (Replace/Copy), operationalization tips, and evidence ideas.
+- Ephemeral: no DB writes or logging; values are not persisted.
 
 ---
 
@@ -701,6 +755,11 @@ Best‑effort only (no official X API):
 - If adding new link types that affect confidence, reuse the backfill‑before‑mutate and recompute‑after pattern.
 - Consider a lightweight event log only if you need true time‑travel (state “just before evidence X”), which is distinct from recompute.
 - Add GET endpoints for listing links if richer editing UI is needed.
+
+### 6.7 Documentation Maintenance
+
+- When you change the application architecture, API entry points, or major flows, update `ARCHITECTURE_DIAGRAM.md` to keep the high‑level diagrams accurate.
+- Keep `README.md` and this `CLAUDE.md` consistent with any new endpoints or behaviors.
 
 ---
 

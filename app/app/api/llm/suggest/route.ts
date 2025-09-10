@@ -74,30 +74,23 @@ export async function POST(req: NextRequest) {
   } as any;
 
   try {
-    // Try preferred model first, then fall back to a stable one
-    const modelsToTry = [preferredModel, 'gemini-1.5-pro'];
-    let data: any = null;
     let usedModel = preferredModel;
-    for (const modelName of modelsToTry) {
-      usedModel = modelName;
-      const controller = new AbortController();
-      const timeout = setTimeout(() => controller.abort(), 15000);
-      const res = await fetch(`${endpointFor(modelName)}?key=${apiKey}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
-        signal: controller.signal,
-      });
-      clearTimeout(timeout);
-      if (res.ok) {
-        data = await res.json();
-        break;
-      }
-      // If model not found or other error, continue to next
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 20000);
+    const res = await fetch(`${endpointFor(usedModel)}?key=${apiKey}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+      signal: controller.signal,
+    });
+    clearTimeout(timeout);
+    if (!res.ok) {
+      return NextResponse.json(
+        { error: 'Gemini request failed', status: res.status, detail: await res.text().catch(() => '') },
+        { status: 502 }
+      );
     }
-    if (!data) {
-      return NextResponse.json({ error: 'Gemini request failed for all models tried' }, { status: 502 });
-    }
+    const data = await res.json();
     const text: string | undefined = data?.candidates?.[0]?.content?.parts?.[0]?.text;
     if (!text) {
       return NextResponse.json({ error: 'No content from model' }, { status: 502 });

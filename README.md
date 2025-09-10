@@ -101,7 +101,7 @@ NEO4J_PASSWORD=neo4jneo4j
 
 # Optional: enable Gemini AI suggestions & chat
 GEMINI_API_KEY=your_gemini_api_key
-# Optional: pick a model; falls back to gemini-1.5-pro if unavailable
+# Optional: pick a model (default: gemini-2.5-pro). No fallback to other models.
 GEMINI_MODEL=gemini-2.5-pro
 ```
 
@@ -284,10 +284,15 @@ When you delete an evidence item (or remove a link to a hypothesis), the hypothe
 - `GET /api/next-id?type=hypothesis|evidence` - Get next available ID
 - `GET /api/check-id?type=hypothesis|evidence&id=XXX` - Check if ID exists
 
+### Analytics Endpoints
+- `GET /api/analytics/accuracy` - Summary and itemized accuracy for verified hypotheses
+  - Returns `{ summary: { total, confirmed, refuted, withPreCount, avgPre, brierMean }, bins: [{ bin, count, avgPred, accuracy }], items: [...] }`
+
 ### AI & Extraction Endpoints
 - `GET /api/extract/x?url=<x_status_url>` - Best-effort text extraction for X/Twitter links (oEmbed + syndication fallback)
 - `POST /api/llm/suggest` - Given hypothesis (id, statement, prior) and evidence text, returns `{ p_e_given_h, p_e_given_not_h, rationale }` using Gemini
 - `POST /api/llm/chat` - Synchronous chat with Gemini using current hypothesis/evidence as context; returns `{ reply }`
+- `POST /api/llm/hypothesis/review` - Evaluate a hypothesis for Bayesian suitability; returns flags (valid, atomicity, falsifiable, measurable, time‑bound), issues, suggested rewrite, operationalization tips, and evidence ideas.
 
 ## 🔁 AFFECTS Link Management
 
@@ -390,9 +395,35 @@ For detailed technical documentation and architecture, see [CLAUDE.md](CLAUDE.md
 - **Clickable Cards**: Dashboard cards now navigate to permanent pages
 - **Link Management UI**: Hypothesis and Evidence pages support editing and unlinking Evidence↔Hypothesis relationships in place
 - **API Enhancement**: New `/api/hypotheses/[id]/links` endpoint to retrieve evidence links for a hypothesis
+### AI Hypothesis Review (January 2026)
+- **Manual AI Review**: In the Add Hypothesis form, click “Get AI Review” to evaluate if the statement is atomic, falsifiable, measurable, and time‑bound.
+- **Suggestion Only**: Returns a suggested rewrite and evidence ideas; nothing is auto‑applied unless you click Replace or copy.
+
+How to use (UI):
+- Open “+ Add New Hypothesis”, enter your statement, then click “Get AI Review”.
+- Review shows: validity flag, atomicity score, issues, suggested rewrite, operationalization tips, and evidence ideas.
+- Click “Replace Statement” to apply, or copy and edit manually. No data is stored.
+
+API usage:
+- Endpoint: `POST /api/llm/hypothesis/review`
+- Request:
+```json
+{ "statement": "AI will transform software development by 2027" }
+```
+- Response fields:
+  - `valid_bayesian` (boolean), `atomicity_score` (0..1)
+  - `issues[]` from: compound, vague_terms, unbounded_timeframe, non_falsifiable, ambiguous_subject, overly_broad_scope, unclear_metric, tautology
+  - `falsifiable`, `measurable`, `time_bound` (booleans)
+  - `suggested_rewrite` (<=160 chars)
+  - `operationalization` { `measurable_event`, `threshold`, `timeframe`, `scope` }
+  - `evidence_ideas[]` (3–6 short items), optional `suggested_tags[]`
+
+### Analytics (January 2026)
+- **Accuracy Dashboard**: Visit `/analytics/accuracy` for Brier mean, bin calibration, and verified items table.
+- **API**: `GET /api/analytics/accuracy` (see Analytics Endpoints for schema).
 ### AI Suggestions/Chat Issues
 - Ensure `GEMINI_API_KEY` is present in `app/.env.local` or environment
-- If `gemini-2.5-pro` is unavailable, the server falls back to `gemini-1.5-pro`
+- Model: `gemini-2.5-pro` by default (or set `GEMINI_MODEL`). There is no automatic fallback to other models.
 - Chat is synchronous (non‑streaming); a full reply appears after a short delay
 
 ### X/Twitter Extraction Limitations
